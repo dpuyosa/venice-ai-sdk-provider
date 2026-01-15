@@ -32,6 +32,6 @@ export interface VeniceAssistantMessage {
 export interface VeniceToolMessage {
   role: 'tool';
   name: string;
-  content: string;
+  content: string | Array<VeniceContentPartText>;
   tool_call_id: string;
 }
