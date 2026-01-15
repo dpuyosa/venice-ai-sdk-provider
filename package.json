@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "^3.0.3",
-    "@ai-sdk/provider-utils": "^4.0.6"
+    "@ai-sdk/provider-utils": "^4.0.7"
   },
   "devDependencies": {
     "@ai-sdk/test-server": "^1.0.1",
@@ -43,14 +43,14 @@
     "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.8",
     "eslint": "^9.39.2",
-    "prettier": "^3.7.4",
+    "prettier": "^3.8.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17",
     "zod": "^4.3.5"
   },
   "peerDependencies": {
-    "ai": "^6.0.34",
+    "ai": "^6.0.37",
     "zod": "^3.25.0 || ^4.0.0"
   },
   "engines": {
