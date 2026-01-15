@@ -1,25 +1,14 @@
-import type {
-  LanguageModelV3Prompt,
-  SharedV3ProviderMetadata,
-} from "@ai-sdk/provider";
+import type { LanguageModelV3Prompt, SharedV3ProviderMetadata } from "@ai-sdk/provider";
 import type { VeniceChatPrompt } from "./venice-chat-prompt";
 
 import { UnsupportedFunctionalityError } from "@ai-sdk/provider";
 import { convertToBase64 } from "@ai-sdk/provider-utils";
 
-function getVeniceMetadata(message: {
-  providerOptions?: SharedV3ProviderMetadata;
-}) {
-  return (
-    message?.providerOptions?.venice ??
-    message?.providerOptions?.openaiCompatible ??
-    null
-  );
+function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
+  return (message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? null);
 }
 
-export function convertToVeniceChatMessages(
-  prompt: LanguageModelV3Prompt,
-): VeniceChatPrompt {
+export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): VeniceChatPrompt {
   const messages: VeniceChatPrompt = [];
   for (const { role, content, providerOptions } of prompt) {
     switch (role) {
@@ -94,11 +83,7 @@ export function convertToVeniceChatMessages(
 
         let assistantText = "";
         let assistantMetadata = {};
-        const toolCalls: Array<{
-          id: string;
-          type: "function";
-          function: { name: string; arguments: string };
-        }> = [];
+        const toolCalls: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> = [];
 
         for (const part of content) {
           switch (part.type) {

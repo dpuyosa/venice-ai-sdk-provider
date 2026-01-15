@@ -1,17 +1,11 @@
 import type { LanguageModelV3, ProviderV3 } from "@ai-sdk/provider";
-import {
-  loadApiKey,
-  withoutTrailingSlash,
-  withUserAgentSuffix,
-  type FetchFunction,
-} from "@ai-sdk/provider-utils";
-import { VERSION } from "./version";
-import { VeniceChatLanguageModel } from "./venice-chat-language-model";
+import type { FetchFunction } from "@ai-sdk/provider-utils";
 
-export interface VeniceProvider extends Omit<
-  ProviderV3,
-  "imageModel" | "completionModel" | "embeddingModel" | "speechModel"
-> {
+import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from "@ai-sdk/provider-utils";
+import { VeniceChatLanguageModel } from "./venice-chat-language-model";
+import { VERSION } from "./version";
+
+export interface VeniceProvider extends Omit<ProviderV3, "imageModel" | "embeddingModel"> {
   (modelId: string): LanguageModelV3;
 
   languageModel(modelId: string): LanguageModelV3;
@@ -39,8 +33,7 @@ export interface VeniceProviderSettings {
 }
 
 export function createVenice(settings: VeniceProviderSettings): VeniceProvider {
-  const baseURL =
-    withoutTrailingSlash(settings.baseURL) ?? "https://api.venice.ai/v1";
+  const baseURL = withoutTrailingSlash(settings.baseURL) ?? "https://api.venice.ai/v1";
 
   const getHeaders = () =>
     withUserAgentSuffix(

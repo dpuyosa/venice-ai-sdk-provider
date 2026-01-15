@@ -1,16 +1,10 @@
 export type VeniceChatPrompt = Array<VeniceMessage>;
 
-export type VeniceMessage =
-  | VeniceSystemMessage
-  | VeniceUserMessage
-  | VeniceAssistantMessage
-  | VeniceToolMessage;
+export type VeniceMessage = VeniceSystemMessage | VeniceUserMessage | VeniceAssistantMessage | VeniceToolMessage;
 
 export type VeniceContentPartText = { type: "text"; text: string };
 export type VeniceContentPartImage = { type: "image_url"; image_url: string };
-export type VeniceUserMessageContentPart =
-  | VeniceContentPartText
-  | VeniceContentPartImage;
+export type VeniceUserMessageContentPart = | VeniceContentPartText | VeniceContentPartImage;
 
 export type VeniceMessageToolCall = {
   type: "function";
