@@ -6,56 +6,57 @@ export const veniceLanguageModelOptions = z.object({
   /**
    * Venice-specific parameters for advanced model features.
    */
-  veniceParameters: z.object({
-    /**
-     * Enable real-time web search. Options: 'off', 'on', 'auto'.
-     *
-     * @default 'off'
-     */
-    enableWebSearch: z.enum(["off", "on", "auto"]).optional(),
+  veniceParameters: z
+    .object({
+      /**
+       * Enable real-time web search. Options: 'off', 'on', 'auto'.
+       *
+       * @default 'off'
+       */
+      enableWebSearch: z.enum(["off", "on", "auto"]).optional(),
 
-    /**
-     * Enable scraping URLs detected in user message.
-     */
-    enableWebScraping: z.boolean().optional(),
+      /**
+       * Enable scraping URLs detected in user message.
+       */
+      enableWebScraping: z.boolean().optional(),
 
-    /**
-     * Include citations in web search results.
-     */
-    enableWebCitations: z.boolean().optional(),
+      /**
+       * Include citations in web search results.
+       */
+      enableWebCitations: z.boolean().optional(),
 
-    /**
-     * Hide reasoning steps from response.
-     */
-    stripThinkingResponse: z.boolean().optional(),
+      /**
+       * Hide reasoning steps from response.
+       */
+      stripThinkingResponse: z.boolean().optional(),
 
-    /**
-     * Disable reasoning mode entirely.
-     */
-    disableThinking: z.boolean().optional(),
+      /**
+       * Disable reasoning mode entirely.
+       */
+      disableThinking: z.boolean().optional(),
 
-    /**
-     * Include Venice system prompts.
-     *
-     * @default false
-     */
-    includeVeniceSystemPrompt: z.boolean().optional(),
+      /**
+       * Include Venice system prompts.
+       *
+       * @default false
+       */
+      includeVeniceSystemPrompt: z.boolean().optional(),
 
-    /**
-     * Use a specific AI character by slug.
-     */
-    characterSlug: z.string().optional(),
+      /**
+       * Use a specific AI character by slug.
+       */
+      characterSlug: z.string().optional(),
 
-    /**
-     * Include search results in the streaming response.
-     */
-    includeSearchResultsInStream: z.boolean().optional(),
+      /**
+       * Include search results in the streaming response.
+       */
+      includeSearchResultsInStream: z.boolean().optional(),
 
-    /**
-     * Return search results as documents.
-     */
-    returnSearchResultsAsDocuments: z.boolean().optional(),
-  })
+      /**
+       * Return search results as documents.
+       */
+      returnSearchResultsAsDocuments: z.boolean().optional(),
+    })
     .optional(),
 
   /**
@@ -154,9 +155,10 @@ export const veniceLanguageModelOptions = z.object({
   /**
    * Options for streaming.
    */
-  streamOptions: z.object({
-    includeUsage: z.boolean().optional(),
-  })
+  streamOptions: z
+    .object({
+      includeUsage: z.boolean().optional(),
+    })
     .optional(),
 
   /**
@@ -230,7 +232,7 @@ export const veniceLanguageModelOptions = z.object({
           parameters: z.any().optional(),
           strict: z.boolean().optional(),
         }),
-      }),
+      })
     )
     .optional(),
 

@@ -10,15 +10,7 @@ import type {
   SharedV3Warning,
 } from "@ai-sdk/provider";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
-import {
-  combineHeaders,
-  createEventSourceResponseHandler,
-  createJsonResponseHandler,
-  generateId,
-  isParsableJson,
-  parseProviderOptions,
-  postJsonToApi,
-} from "@ai-sdk/provider-utils";
+import { combineHeaders, createEventSourceResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
 import type { ParseResult } from "@ai-sdk/provider-utils";
 import { z } from "zod/v4";
 import type { VeniceChatModelId } from "./venice-chat-options";
@@ -63,12 +55,12 @@ const veniceChatResponseSchema = z.looseObject({
                 name: z.string(),
                 arguments: z.string(),
               }),
-            }),
+            })
           )
           .nullish(),
       }),
       finish_reason: z.string().nullish(),
-    }),
+    })
   ),
   usage: z
     .object({
@@ -106,13 +98,13 @@ const chunkBaseSchema = z.looseObject({
                   name: z.string().nullish(),
                   arguments: z.string().nullish(),
                 }),
-              }),
+              })
             )
             .nullish(),
         })
         .nullish(),
       finish_reason: z.string().nullish(),
-    }),
+    })
   ),
   usage: z
     .object({
@@ -129,32 +121,19 @@ const chunkBaseSchema = z.looseObject({
     .nullish(),
 });
 
-const veniceChatChunkSchema = z.union([
-  chunkBaseSchema,
-  z.object({ error: z.object({ message: z.string() }) }),
-]);
+const veniceChatChunkSchema = z.union([chunkBaseSchema, z.object({ error: z.object({ message: z.string() }) })]);
 
 type VeniceChunk = z.infer<typeof veniceChatChunkSchema>;
 
-const defaultVeniceFailedResponseHandler = async ({
-  response,
-  errorData,
-}: {
-  response: Response;
-  errorData?: Record<string, unknown>;
-}) => {
-  const errorMessage = (errorData as { error?: { message?: string } })?.error
-    ?.message;
+const defaultVeniceFailedResponseHandler = async ({ response, errorData }: { response: Response; errorData?: Record<string, unknown> }) => {
+  const errorMessage = (errorData as { error?: { message?: string } })?.error?.message;
   const directMessage = (errorData as { message?: string })?.message;
-  const message =
-    errorMessage ?? directMessage ?? response.statusText ?? "Unknown error";
+  const message = errorMessage ?? directMessage ?? response.statusText ?? "Unknown error";
 
   throw new Error(`Venice API error: ${message}`);
 };
 
-function mapVeniceFinishReason(
-  finishReason: string | null | undefined,
-): LanguageModelV3FinishReason {
+function mapVeniceFinishReason(finishReason: string | null | undefined): LanguageModelV3FinishReason {
   switch (finishReason) {
     case "stop":
       return { unified: "stop", raw: finishReason };
@@ -172,9 +151,7 @@ function mapVeniceFinishReason(
   }
 }
 
-function convertVeniceUsage(
-  usage: VeniceUsage | null | undefined,
-): LanguageModelV3Usage {
+function convertVeniceUsage(usage: VeniceUsage | null | undefined): LanguageModelV3Usage {
   if (!usage) {
     return {
       inputTokens: {
@@ -213,16 +190,10 @@ function convertVeniceUsage(
   };
 }
 
-function getResponseMetadata(response: {
-  id?: string | null | undefined;
-  created?: number | null | undefined;
-  model?: string | null | undefined;
-}) {
+function getResponseMetadata(response: { id?: string | null | undefined; created?: number | null | undefined; model?: string | null | undefined }) {
   return {
     id: response.id ?? generateId(),
-    timestamp: response.created
-      ? new Date(response.created * 1000)
-      : new Date(),
+    timestamp: response.created ? new Date(response.created * 1000) : new Date(),
     modelId: response.model ?? "unknown",
   };
 }
@@ -248,20 +219,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     return this.config.supportedUrls?.() ?? {};
   }
 
-  private async getArgs({
-    prompt,
-    maxOutputTokens,
-    temperature,
-    topP,
-    topK,
-    frequencyPenalty,
-    presencePenalty,
-    stopSequences,
-    responseFormat,
-    seed,
-    toolChoice,
-    tools,
-  }: LanguageModelV3CallOptions) {
+  private async getArgs({ prompt, maxOutputTokens, temperature, topP, topK, frequencyPenalty, presencePenalty, stopSequences, responseFormat, seed, toolChoice, tools }: LanguageModelV3CallOptions) {
     const warnings: SharedV3Warning[] = [];
 
     const veniceOptions =
@@ -280,10 +238,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
       toolChoice: mappedToolChoice,
       toolWarnings,
     } = this.prepareTools({
-      tools: tools?.filter(
-        (t): t is Extract<typeof t, { type: "function" }> =>
-          t.type === "function",
-      ) as
+      tools: tools?.filter((t): t is Extract<typeof t, { type: "function" }> => t.type === "function") as
         | Array<{
             type: "function";
             name: string;
@@ -339,12 +294,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
   }
 
   // Type assertion for Venice function tool
-  private toVeniceFunctionTool(tool: {
-    type: "function";
-    name: string;
-    description?: string;
-    inputSchema?: Record<string, unknown>;
-  }): {
+  private toVeniceFunctionTool(tool: { type: "function"; name: string; description?: string; inputSchema?: Record<string, unknown> }): {
     type: "function";
     function: { name: string; description?: string; parameters: unknown };
   } {
@@ -384,11 +334,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
     const functionTools = tools?.map((tool) => this.toVeniceFunctionTool(tool));
 
-    let mappedToolChoice:
-      | { type: "function"; function: { name: string } }
-      | { type: "auto" }
-      | { type: "none" }
-      | undefined;
+    let mappedToolChoice: { type: "function"; function: { name: string } } | { type: "auto" } | { type: "none" } | undefined;
 
     if (toolChoice != null) {
       if (toolChoice.type === "function" && toolChoice.name != null) {
@@ -418,9 +364,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     };
   }
 
-  async doGenerate(
-    options: LanguageModelV3CallOptions,
-  ): Promise<LanguageModelV3GenerateResult> {
+  async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
     const { args, warnings } = await this.getArgs({ ...options });
 
     const {
@@ -435,9 +379,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
       headers: combineHeaders(this.config.headers(), options.headers),
       body: args,
       failedResponseHandler: defaultVeniceFailedResponseHandler,
-      successfulResponseHandler: createJsonResponseHandler(
-        veniceChatResponseSchema,
-      ),
+      successfulResponseHandler: createJsonResponseHandler(veniceChatResponseSchema),
       abortSignal: options.abortSignal,
       fetch: this.config.fetch,
     });
@@ -449,8 +391,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
       content.push({ type: "text", text: choice.message.content });
     }
 
-    const reasoning =
-      choice?.message?.reasoning_content ?? choice?.message?.reasoning;
+    const reasoning = choice?.message?.reasoning_content ?? choice?.message?.reasoning;
     if (reasoning != null && reasoning.length > 0) {
       content.push({
         type: "reasoning",
@@ -483,17 +424,13 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     };
   }
 
-  async doStream(
-    options: LanguageModelV3CallOptions,
-  ): Promise<LanguageModelV3StreamResult> {
+  async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
     const { args, warnings } = await this.getArgs({ ...options });
 
     const body = {
       ...args,
       stream: true,
-      stream_options: this.config.includeUsage
-        ? { include_usage: true }
-        : undefined,
+      stream_options: this.config.includeUsage ? { include_usage: true } : undefined,
     };
 
     const { responseHeaders, value: response } = await postJsonToApi({
@@ -504,9 +441,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
       headers: combineHeaders(this.config.headers(), options.headers),
       body,
       failedResponseHandler: defaultVeniceFailedResponseHandler,
-      successfulResponseHandler: createEventSourceResponseHandler(
-        this.chunkSchema,
-      ),
+      successfulResponseHandler: createEventSourceResponseHandler(this.chunkSchema),
       abortSignal: options.abortSignal,
       fetch: this.config.fetch,
     });
@@ -532,10 +467,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
     return {
       stream: response.pipeThrough(
-        new TransformStream<
-          ParseResult<VeniceChunk>,
-          LanguageModelV3StreamPart
-        >({
+        new TransformStream<ParseResult<VeniceChunk>, LanguageModelV3StreamPart>({
           start(controller) {
             controller.enqueue({ type: "stream-start", warnings });
           },
@@ -557,9 +489,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
               finishReason = { unified: "error", raw: undefined };
               controller.enqueue({
                 type: "error",
-                error:
-                  (value as { error?: { message?: string } }).error?.message ??
-                  "Unknown error",
+                error: (value as { error?: { message?: string } }).error?.message ?? "Unknown error",
               });
               return;
             }
@@ -668,10 +598,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                   const toolCall = toolCalls[index];
 
-                  if (
-                    toolCall.function?.name != null &&
-                    toolCall.function?.arguments != null
-                  ) {
+                  if (toolCall.function?.name != null && toolCall.function?.arguments != null) {
                     if (toolCall.function.arguments.length > 0) {
                       controller.enqueue({
                         type: "tool-input-delta",
@@ -706,8 +633,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 }
 
                 if (toolCallDelta.function?.arguments != null) {
-                  toolCall.function.arguments +=
-                    toolCallDelta.function?.arguments ?? "";
+                  toolCall.function.arguments += toolCallDelta.function?.arguments ?? "";
                 }
 
                 controller.enqueue({
@@ -716,11 +642,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                   delta: toolCallDelta.function.arguments ?? "",
                 });
 
-                if (
-                  toolCall.function?.name != null &&
-                  toolCall.function?.arguments != null &&
-                  isParsableJson(toolCall.function.arguments)
-                ) {
+                if (toolCall.function?.name != null && toolCall.function?.arguments != null && isParsableJson(toolCall.function.arguments)) {
                   controller.enqueue({
                     type: "tool-input-end",
                     id: toolCall.id,
@@ -747,9 +669,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
               controller.enqueue({ type: "text-end", id: "txt-0" });
             }
 
-            for (const toolCall of toolCalls.filter(
-              (toolCall) => !toolCall.hasFinished,
-            )) {
+            for (const toolCall of toolCalls.filter((toolCall) => !toolCall.hasFinished)) {
               controller.enqueue({
                 type: "tool-input-end",
                 id: toolCall.id,
@@ -769,7 +689,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
               usage: convertVeniceUsage(usage ?? null),
             });
           },
-        }),
+        })
       ),
       request: { body },
       response: { headers: responseHeaders },

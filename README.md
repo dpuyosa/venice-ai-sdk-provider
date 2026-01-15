@@ -20,25 +20,24 @@ yarn add @venice/ai-sdk-provider
 You can import the default provider instance `venice` from `@venice/ai-sdk-provider`:
 
 ```ts
-import { venice } from '@venice/ai-sdk-provider';
+import { venice } from "@venice/ai-sdk-provider";
 ```
 
 ## Example
 
 ```ts
-import { venice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
+import { venice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
 
 const { text } = await generateText({
-  model: venice('zai-org-glm-4.6'),
-  prompt: 'Write a vegetarian lasagna recipe for 4 people.',
+  model: venice("zai-org-glm-4.6"),
+  prompt: "Write a vegetarian lasagna recipe for 4 people.",
 });
 ```
 
 ## Supported models
 
 This list is not definitive. Venice regularly adds new models to their system. You can find the latest list of models [here](https://docs.venice.ai/models/overview).
-
 
 ## Venice-Specific Features
 
@@ -47,18 +46,18 @@ This list is not definitive. Venice regularly adds new models to their system. Y
 Enable real-time web search with citations on all Venice text models:
 
 ```ts
-import { createVenice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
+import { createVenice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
 
-const venice = createVenice({ apiKey: 'your-api-key' });
-const model = venice('zai-org-glm-4.6');
+const venice = createVenice({ apiKey: "your-api-key" });
+const model = venice("zai-org-glm-4.6");
 
 const { text } = await generateText({
   model,
-  prompt: 'What are the latest developments in AI?',
+  prompt: "What are the latest developments in AI?",
   providerOptions: {
     venice: {
-      enable_web_search: 'auto',
+      enable_web_search: "auto",
     },
   },
 });
@@ -69,15 +68,15 @@ const { text } = await generateText({
 Enable advanced step-by-step reasoning with visible thinking process:
 
 ```ts
-import { createVenice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
+import { createVenice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
 
-const venice = createVenice({ apiKey: 'your-api-key' });
-const model = venice('qwen3-235b-a22b-thinking-2507');
+const venice = createVenice({ apiKey: "your-api-key" });
+const model = venice("qwen3-235b-a22b-thinking-2507");
 
 const { text } = await generateText({
   model,
-  prompt: 'Solve: If x + 2y = 10 and 3x - y = 5, what are x and y?',
+  prompt: "Solve: If x + 2y = 10 and 3x - y = 5, what are x and y?",
   providerOptions: {
     venice: {
       strip_thinking_response: false,
@@ -91,15 +90,15 @@ const { text } = await generateText({
 Control the depth of reasoning for models that support it:
 
 ```ts
-import { venice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
+import { venice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
 
 const { text } = await generateText({
-  model: venice('gemini-3-pro-preview'),
-  prompt: 'Prove that there are infinitely many primes',
+  model: venice("gemini-3-pro-preview"),
+  prompt: "Prove that there are infinitely many primes",
   providerOptions: {
     venice: {
-      reasoning_effort: 'high',
+      reasoning_effort: "high",
     },
   },
 });
@@ -112,23 +111,23 @@ Options: `low` (fast, minimal thinking), `medium` (default, balanced), `high` (d
 Venice supports function calling on compatible models:
 
 ```ts
-import { venice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
+import { venice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
 
 const { text } = await generateText({
-  model: venice('zai-org-glm-4.6'),
+  model: venice("zai-org-glm-4.6"),
   tools: {
     get_weather: {
-      description: 'Get current weather for a location',
+      description: "Get current weather for a location",
       parameters: z.object({
-        location: z.string().describe('City name'),
+        location: z.string().describe("City name"),
       }),
       execute: async ({ location }) => {
-        return { temperature: 72, condition: 'sunny' };
+        return { temperature: 72, condition: "sunny" };
       },
     },
   },
-  prompt: 'What is the weather like in New York?',
+  prompt: "What is the weather like in New York?",
 });
 ```
 
@@ -139,19 +138,19 @@ Process images with vision-compatible models. Venice supports two ways to provid
 #### Option 1: Using image URL
 
 ```ts
-import { venice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
+import { venice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
 
 const { text } = await generateText({
-  model: venice('mistral-31-24b'),
+  model: venice("mistral-31-24b"),
   messages: [
     {
-      role: 'user',
+      role: "user",
       content: [
-        { type: 'text', text: 'What do you see in this image?' },
-        { 
-          type: 'image_url', 
-          image_url: { url: 'https://example.com/image.jpg' } 
+        { type: "text", text: "What do you see in this image?" },
+        {
+          type: "image_url",
+          image_url: { url: "https://example.com/image.jpg" },
         },
       ],
     },
@@ -162,23 +161,23 @@ const { text } = await generateText({
 #### Option 2: Using image data (base64)
 
 ```ts
-import { venice } from '@venice/ai-sdk-provider';
-import { generateText } from 'ai';
-import { readFile } from 'fs/promises';
+import { venice } from "@venice/ai-sdk-provider";
+import { generateText } from "ai";
+import { readFile } from "fs/promises";
 
-const imageBuffer = await readFile('path/to/image.jpg');
-const imageBase64 = imageBuffer.toString('base64');
+const imageBuffer = await readFile("path/to/image.jpg");
+const imageBase64 = imageBuffer.toString("base64");
 
 const { text } = await generateText({
-  model: venice('mistral-31-24b'),
+  model: venice("mistral-31-24b"),
   messages: [
     {
-      role: 'user',
+      role: "user",
       content: [
-        { type: 'text', text: 'What do you see in this image?' },
-        { 
-          type: 'image_url', 
-          image_url: { url: `data:image/jpeg;base64,${imageBase64}` } 
+        { type: "text", text: "What do you see in this image?" },
+        {
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
         },
       ],
     },
@@ -193,12 +192,12 @@ Note: Use vision-capable models like `mistral-31-24b` for image analysis.
 Venice supports embedding models for semantic search and RAG pipelines:
 
 ```ts
-import { embed } from 'ai';
-import { venice } from '@venice/ai-sdk-provider';
+import { embed } from "ai";
+import { venice } from "@venice/ai-sdk-provider";
 
 const { embedding } = await embed({
-  model: venice.textEmbeddingModel('text-embedding-model-id'),
-  value: 'sunny day at the beach',
+  model: venice.textEmbeddingModel("text-embedding-model-id"),
+  value: "sunny day at the beach",
 });
 
 console.log(embedding);
@@ -215,9 +214,9 @@ export VENICE_API_KEY=your-api-key-here
 Or pass it directly when creating a provider instance:
 
 ```ts
-import { createVenice } from '@venice/ai-sdk-provider';
+import { createVenice } from "@venice/ai-sdk-provider";
 
-const venice = createVenice({ apiKey: 'your-api-key' });
+const venice = createVenice({ apiKey: "your-api-key" });
 ```
 
 ## Learn More

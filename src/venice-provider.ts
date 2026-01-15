@@ -45,7 +45,7 @@ export function createVenice(settings: VeniceProviderSettings): VeniceProvider {
         })}`,
         ...settings.headers,
       },
-      `ai-sdk/venice/${VERSION}`,
+      `ai-sdk/venice/${VERSION}`
     );
 
   const createChatModel = (modelId: string) =>

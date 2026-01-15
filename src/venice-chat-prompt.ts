@@ -4,7 +4,7 @@ export type VeniceMessage = VeniceSystemMessage | VeniceUserMessage | VeniceAssi
 
 export type VeniceContentPartText = { type: "text"; text: string };
 export type VeniceContentPartImage = { type: "image_url"; image_url: string };
-export type VeniceUserMessageContentPart = | VeniceContentPartText | VeniceContentPartImage;
+export type VeniceUserMessageContentPart = VeniceContentPartText | VeniceContentPartImage;
 
 export type VeniceMessageToolCall = {
   type: "function";
