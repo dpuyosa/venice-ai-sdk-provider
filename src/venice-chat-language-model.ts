@@ -55,6 +55,15 @@ const veniceChatResponseSchema = z.looseObject({
                 name: z.string(),
                 arguments: z.string(),
               }),
+              extra_content: z
+                .object({
+                  google: z
+                    .object({
+                      thought_signature: z.string().nullish(),
+                    })
+                    .nullish(),
+                })
+                .nullish(),
             })
           )
           .nullish(),
@@ -98,6 +107,15 @@ const chunkBaseSchema = z.looseObject({
                   name: z.string().nullish(),
                   arguments: z.string().nullish(),
                 }),
+                extra_content: z
+                  .object({
+                    google: z
+                      .object({
+                        thought_signature: z.string().nullish(),
+                      })
+                      .nullish(),
+                  })
+                  .nullish(),
               })
             )
             .nullish(),
@@ -401,11 +419,19 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
     if (choice?.message?.tool_calls != null) {
       for (const toolCall of choice.message.tool_calls) {
+        const thoughtSignature = toolCall.extra_content?.google?.thought_signature;
         content.push({
           type: "tool-call",
           toolCallId: toolCall.id ?? generateId(),
           toolName: toolCall.function.name,
           input: toolCall.function.arguments!,
+          ...(thoughtSignature
+            ? {
+                providerMetadata: {
+                  venice: { thoughtSignature },
+                },
+              }
+            : {}),
         });
       }
     }
@@ -454,6 +480,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         arguments: string;
       };
       hasFinished: boolean;
+      thoughtSignature?: string;
     }> = [];
 
     let finishReason: LanguageModelV3FinishReason = {
@@ -594,9 +621,10 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                       arguments: toolCallDelta.function.arguments ?? "",
                     },
                     hasFinished: false,
+                    thoughtSignature: toolCallDelta.extra_content?.google?.thought_signature ?? undefined,
                   };
 
-                  const toolCall = toolCalls[index];
+                  const toolCall = toolCalls[index]!;
 
                   if (toolCall.function?.name != null && toolCall.function?.arguments != null) {
                     if (toolCall.function.arguments.length > 0) {
@@ -618,6 +646,13 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                         toolCallId: toolCall.id ?? generateId(),
                         toolName: toolCall.function.name,
                         input: toolCall.function.arguments,
+                        ...(toolCall.thoughtSignature
+                          ? {
+                              providerMetadata: {
+                                venice: { thoughtSignature: toolCall.thoughtSignature },
+                              },
+                            }
+                          : {}),
                       });
                       toolCall.hasFinished = true;
                     }
