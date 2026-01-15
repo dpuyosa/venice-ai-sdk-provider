@@ -9,7 +9,7 @@ export type VeniceMessage =
 
 export type VeniceContentPartText = { type: 'text'; text: string };
 export type VeniceContentPartImage = { type: 'image_url'; image_url: string };
-export type VeniceUserMessageContentPart = | VeniceContentPartText | VeniceContentPartImage;
+export type VeniceUserMessageContentPart = VeniceContentPartText | VeniceContentPartImage;
 
 export type VeniceMessageToolCall = { type: 'function'; id: string; function: { name: string; arguments: string } }
 

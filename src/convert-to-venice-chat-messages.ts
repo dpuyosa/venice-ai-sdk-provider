@@ -1,13 +1,12 @@
-import type {
-  LanguageModelV3Prompt,
-  SharedV3ProviderMetadata,
-} from '@ai-sdk/provider';
+import type { LanguageModelV3Prompt, SharedV3ProviderMetadata } from '@ai-sdk/provider';
+import type { VeniceChatPrompt } from './venice-chat-prompt';
+
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
-import type { VeniceChatPrompt, VeniceContentPartText } from './venice-chat-prompt';
 import { convertToBase64 } from '@ai-sdk/provider-utils';
 
+
 function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
-  return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
+  return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? null;
 }
 
 export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): VeniceChatPrompt {
@@ -15,19 +14,21 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): Veni
   for (const { role, content, providerOptions } of prompt) {
     switch (role) {
       case 'system': {
+        const metadata = getVeniceMetadata({ providerOptions });
         messages.push({
           role: 'system',
-          content: [{ type: 'text', text: content, ...getVeniceMetadata({ providerOptions }) }]
+          content: metadata ? [{ type: 'text', text: content, ...metadata }] : content
         });
         break;
       }
 
       case 'user': {
         if (content.length === 1 && content[0]?.type === 'text') {
+          const partMetadata = getVeniceMetadata(content[0]);
           messages.push({
             role: 'user',
-            content: [{ type: 'text', text: content[0].text }],
-            ...getVeniceMetadata(content[0]),
+            content: partMetadata ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+            ...getVeniceMetadata({ providerOptions }),
           });
           break;
         }
@@ -35,23 +36,17 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): Veni
         messages.push({
           role: 'user',
           content: content.map(part => {
+            const partMetadata = getVeniceMetadata(part);
             switch (part.type) {
               case 'text': {
-                return { type: 'text', text: part.text };
+                return { type: 'text', text: part.text, ...partMetadata };
               }
               case 'file': {
                 if (part.mediaType.startsWith('image/')) {
-                  const mediaType =
-                    part.mediaType === 'image/*'
-                      ? 'image/jpeg'
-                      : part.mediaType;
-
                   return {
                     type: 'image_url',
-                    image_url:
-                      part.data instanceof URL
-                        ? part.data.toString()
-                        : `data:${mediaType};base64,${convertToBase64(part.data)}`,
+                    image_url: part.data instanceof URL ? part.data.toString() : `data:${part.mediaType};base64,${convertToBase64(part.data)}`,
+                    ...partMetadata
                   };
                 } else {
                   throw new UnsupportedFunctionalityError({
@@ -68,17 +63,25 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): Veni
       }
 
       case 'assistant': {
-        let assistantText = '';
-        const toolCalls: Array<{
-          id: string;
-          type: 'function';
-          function: { name: string; arguments: string };
-        }> = [];
+        if (content.length === 1 && content[0]?.type === 'text') {
+          const partMetadata = getVeniceMetadata(content[0]);
+          messages.push({
+            role: 'assistant',
+            content: partMetadata ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+            ...getVeniceMetadata({ providerOptions }),
+          });
+          break;
+        }
+
+        let assistantText = "";
+        let assistantMetadata = {};
+        const toolCalls: Array<{ id: string, type: 'function', function: { name: string, arguments: string } }> = [];
 
         for (const part of content) {
           switch (part.type) {
             case 'text': {
               assistantText += part.text;
+              assistantMetadata = { ...assistantMetadata, ...getVeniceMetadata(part) };
               break;
             }
             case 'tool-call': {
@@ -89,15 +92,17 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): Veni
                   name: part.toolName,
                   arguments: JSON.stringify(part.input),
                 },
+                ...getVeniceMetadata(part)
               });
               break;
             }
+            // case 'reasoning': { }
           }
         }
 
         messages.push({
           role: 'assistant',
-          content: assistantText ? [{ type: 'text', text: assistantText }] : null,
+          content: Object.keys(assistantMetadata) || assistantText ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : null,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
           ...getVeniceMetadata({ providerOptions }),
         });
@@ -111,30 +116,29 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt): Veni
             continue;
           }
 
+          const metadata = getVeniceMetadata(toolResponse);
           const output = toolResponse.output;
 
-          let contentValue: string | Array<VeniceContentPartText>;
+          let contentText: string;
           switch (output.type) {
             case 'text':
-              contentValue = [{ type: 'text', text: output.value }];
-              break;
             case 'error-text':
-              contentValue = output.value;
+              contentText = output.value;
               break;
             case 'execution-denied':
-              contentValue = output.reason ?? 'Tool execution denied.';
+              contentText = output.reason ?? 'Tool execution denied.';
               break;
             case 'content':
             case 'json':
             case 'error-json':
-              contentValue = JSON.stringify(output.value);
+              contentText = JSON.stringify(output.value);
               break;
           }
 
           messages.push({
             role: 'tool',
             name: toolResponse.toolName,
-            content: contentValue,
+            content: metadata ? [{ type: 'text', text: contentText, ...metadata }] : contentText,
             tool_call_id: toolResponse.toolCallId,
             ...getVeniceMetadata(toolResponse),
           });
