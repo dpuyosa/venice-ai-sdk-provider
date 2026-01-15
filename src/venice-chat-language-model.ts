@@ -36,6 +36,36 @@ interface VeniceUsage {
   } | null;
 }
 
+const veniceUsageSchema = z
+  .object({
+    prompt_tokens: z.number().nullish(),
+    completion_tokens: z.number().nullish(),
+    total_tokens: z.number().nullish(),
+    prompt_tokens_details: z
+      .object({
+        cached_tokens: z.number().nullish(),
+        cache_creation_input_tokens: z.number().nullish(),
+      })
+      .nullish(),
+  })
+  .nullish();
+
+const veniceExtraContentSchema = z
+  .object({
+    google: z
+      .object({
+        thought_signature: z.string().nullish(),
+      })
+      .nullish(),
+  })
+  .nullish();
+
+const veniceMessageContentSchema = z.object({
+  content: z.string().nullish(),
+  reasoning_content: z.string().nullish(),
+  reasoning: z.string().nullish(),
+});
+
 const veniceChatResponseSchema = z.looseObject({
   id: z.string().nullish(),
   created: z.number().nullish(),
@@ -44,9 +74,7 @@ const veniceChatResponseSchema = z.looseObject({
     z.object({
       message: z.object({
         role: z.literal("assistant").nullish(),
-        content: z.string().nullish(),
-        reasoning_content: z.string().nullish(),
-        reasoning: z.string().nullish(),
+        ...veniceMessageContentSchema.shape,
         tool_calls: z
           .array(
             z.object({
@@ -55,15 +83,7 @@ const veniceChatResponseSchema = z.looseObject({
                 name: z.string(),
                 arguments: z.string(),
               }),
-              extra_content: z
-                .object({
-                  google: z
-                    .object({
-                      thought_signature: z.string().nullish(),
-                    })
-                    .nullish(),
-                })
-                .nullish(),
+              extra_content: veniceExtraContentSchema,
             })
           )
           .nullish(),
@@ -71,19 +91,7 @@ const veniceChatResponseSchema = z.looseObject({
       finish_reason: z.string().nullish(),
     })
   ),
-  usage: z
-    .object({
-      prompt_tokens: z.number().nullish(),
-      completion_tokens: z.number().nullish(),
-      total_tokens: z.number().nullish(),
-      prompt_tokens_details: z
-        .object({
-          cached_tokens: z.number().nullish(),
-          cache_creation_input_tokens: z.number().nullish(),
-        })
-        .nullish(),
-    })
-    .nullish(),
+  usage: veniceUsageSchema,
 });
 
 const chunkBaseSchema = z.looseObject({
@@ -95,9 +103,7 @@ const chunkBaseSchema = z.looseObject({
       delta: z
         .object({
           role: z.enum(["assistant"]).nullish(),
-          content: z.string().nullish(),
-          reasoning_content: z.string().nullish(),
-          reasoning: z.string().nullish(),
+          ...veniceMessageContentSchema.shape,
           tool_calls: z
             .array(
               z.object({
@@ -107,15 +113,7 @@ const chunkBaseSchema = z.looseObject({
                   name: z.string().nullish(),
                   arguments: z.string().nullish(),
                 }),
-                extra_content: z
-                  .object({
-                    google: z
-                      .object({
-                        thought_signature: z.string().nullish(),
-                      })
-                      .nullish(),
-                  })
-                  .nullish(),
+                extra_content: veniceExtraContentSchema,
               })
             )
             .nullish(),
@@ -124,19 +122,7 @@ const chunkBaseSchema = z.looseObject({
       finish_reason: z.string().nullish(),
     })
   ),
-  usage: z
-    .object({
-      prompt_tokens: z.number().nullish(),
-      completion_tokens: z.number().nullish(),
-      total_tokens: z.number().nullish(),
-      prompt_tokens_details: z
-        .object({
-          cached_tokens: z.number().nullish(),
-          cache_creation_input_tokens: z.number().nullish(),
-        })
-        .nullish(),
-    })
-    .nullish(),
+  usage: veniceUsageSchema,
 });
 
 const veniceChatChunkSchema = z.union([chunkBaseSchema, z.object({ error: z.object({ message: z.string() }) })]);
