@@ -1,46 +1,76 @@
+import type { MetadataExtractor, ProviderErrorStructure } from "@ai-sdk/openai-compatible";
 import type { LanguageModelV3, LanguageModelV3CallOptions } from "@ai-sdk/provider";
-import { postJsonToApi } from "@ai-sdk/provider-utils";
+import { parseProviderOptions, postJsonToApi, type FetchFunction } from "@ai-sdk/provider-utils";
+import { veniceLanguageModelOptions } from "./venice-chat-options";
+import { prepareTools } from "./venice-prepare-tools";
 
 export interface VeniceChatConfig {
     provider: string;
-    baseURL: string;
-    headers: () => Record<string, string>;
-    fetch?: (input: RequestInfo, init?: RequestInit) => Promise<Response>;
-}
-
-export interface VeniceChatSettings {
-    temperature?: number;
-    maxTokens?: number;
-    topP?: number;
+    headers: () => Record<string, string | undefined>;
+    url: (options: { modelId: string; path: string }) => string;
+    fetch?: FetchFunction;
+    includeUsage?: boolean;
+    errorStructure?: ProviderErrorStructure<any>;
+    metadataExtractor?: MetadataExtractor;
+    supportsStructuredOutputs?: boolean;
+    supportedUrls?: () => LanguageModelV3["supportedUrls"];
 }
 
 export class VeniceChatLanguageModel implements LanguageModelV3 {
-    readonly specificationVersion = "V3";
-    readonly provider: string;
+    readonly specificationVersion = "v3";
     readonly modelId: string;
+    readonly config: VeniceChatConfig;
+
 
     constructor(
         modelId: string,
-        private settings: VeniceChatSettings = {},
-        private config: VeniceChatConfig
+        config: VeniceChatConfig
     ) {
-        this.provider = config.provider;
         this.modelId = modelId;
+        this.config = config;
     }
 
-    private getArgs(options: LanguageModelV3CallOptions) {
-        const messages = options.prompt.map((message) => ({
-            role: message.role,
-            content: message.content.length === 1 && message.content[0].type === "text" ? message.content[0].text : message.content,
-        }));
+    // TODO: Add error handling?
+
+    get provider(): string {
+        return this.config.provider ?? "venice";
+    }
+
+    get supportedUrls() {
+        return this.config.supportedUrls?.() ?? {
+            "image/*": [/^data:image\/(?:jpeg|png|webp);base64,/, /^https?:\/\/.+\.(jpg|jpeg|png|webp)$/i],
+        };
+    }
+
+    private async getArgs(options: LanguageModelV3CallOptions) {
+        const compatibleOptions = Object.assign(
+            (await parseProviderOptions({
+                provider: this.provider,
+                providerOptions: options.providerOptions,
+                schema: veniceLanguageModelOptions,
+            })) ?? {},
+            (await parseProviderOptions({
+                provider: 'openai-compatible',
+                providerOptions: options.providerOptions,
+                schema: veniceLanguageModelOptions,
+            })) ?? {},
+        );
+
+        const {
+            tools: openaiTools,
+            toolChoice: openaiToolChoice,
+            toolWarnings,
+        } = prepareTools({
+            tools: options.tools,
+            toolChoice: options.toolChoice,
+        });
+
 
         return {
-            model: this.modelId,
-            messages,
-            temperature: options.temperature ?? this.settings.temperature,
-            max_tokens: options.maxOutputTokens ?? this.settings.maxTokens,
-            top_p: this.settings.topP,
-        };
+            args: {
+
+            }
+        }
     }
 
     async doGenerate(options: LanguageModelV3CallOptions) {
