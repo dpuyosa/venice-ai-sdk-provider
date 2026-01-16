@@ -15,6 +15,7 @@
     "build": "tsup",
     "clean": "rm -rf dist",
     "dev": "tsup --watch",
+    "pack": "rm -rf dist && tsup && npm pack",
     "lint": "eslint \"./**/*.ts*\"",
     "lint-fix": "eslint \"./**/*.ts*\" --fix",
     "type-check": "tsc --noEmit",
