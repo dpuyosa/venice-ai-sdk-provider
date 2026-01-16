@@ -56,7 +56,7 @@ export interface VeniceProvider extends ProviderV3 {
     embeddingModel(modelId: string): OpenAICompatibleEmbeddingModel;
 }
 
-export function createVenice(options: VeniceProviderSettings): VeniceProvider {
+export function createVenice(options: VeniceProviderSettings = {}): VeniceProvider {
     const baseURL = withoutTrailingSlash(options.baseURL ?? "https://api.venice.ai/v1");
     const providerName = options.name ?? "venice";
 
@@ -108,3 +108,5 @@ export function createVenice(options: VeniceProviderSettings): VeniceProvider {
 
     return provider as VeniceProvider;
 }
+
+export const venice = createVenice();
