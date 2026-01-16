@@ -17,15 +17,9 @@
     "clean": "rm -rf dist",
     "dev": "tsup --watch",
     "pack": "rm -rf dist && tsup && npm pack",
-    "lint": "eslint \"./**/*.ts*\"",
-    "lint-fix": "eslint \"./**/*.ts*\" --fix",
     "type-check": "tsc --noEmit",
     "prettier-check": "prettier --check \"./**/*.ts*\"",
     "prettier-fix": "prettier --write \"./**/*.ts*\"",
-    "test": "pnpm test:node && pnpm test:edge",
-    "test:node": "vitest --config vitest.node.config.ts --run",
-    "test:edge": "vitest --config vitest.edge.config.ts --run",
-    "test:watch": "vitest --config vitest.node.config.ts"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -42,14 +36,10 @@
   },
   "devDependencies": {
     "@ai-sdk/test-server": "^1.0.1",
-    "@edge-runtime/vm": "^5.0.0",
-    "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.9",
-    "eslint": "^9.39.2",
     "prettier": "^3.8.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17",
     "zod": "^4.3.5"
   },
   "peerDependencies": {
