@@ -1,9 +1,10 @@
-import { type ProviderV3 } from "@ai-sdk/provider";
-import { OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from "@ai-sdk/openai-compatible";
-import { type FetchFunction, loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from "@ai-sdk/provider-utils";
+import type { ProviderV3 } from "@ai-sdk/provider";
+import type { FetchFunction } from "@ai-sdk/provider-utils";
 
-import { VeniceChatLanguageModel } from "./venice-chat-language-model";
 import { VERSION } from "./version";
+import { VeniceChatLanguageModel } from "./venice-chat-language-model";
+import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from "@ai-sdk/provider-utils";
+import { OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from "@ai-sdk/openai-compatible";
 
 export interface VeniceProviderSettings {
     /**
