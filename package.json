@@ -19,7 +19,7 @@
     "pack": "rm -rf dist && tsup && npm pack",
     "type-check": "tsc --noEmit",
     "prettier-check": "prettier --check \"./**/*.ts*\"",
-    "prettier-fix": "prettier --write \"./**/*.ts*\"",
+    "prettier-fix": "prettier --write \"./**/*.ts*\""
   },
   "exports": {
     "./package.json": "./package.json",

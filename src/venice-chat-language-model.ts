@@ -1,7 +1,7 @@
 import type { MetadataExtractor, ProviderErrorStructure } from "@ai-sdk/openai-compatible";
 import type { LanguageModelV3, LanguageModelV3CallOptions } from "@ai-sdk/provider";
 import { parseProviderOptions, postJsonToApi, type FetchFunction } from "@ai-sdk/provider-utils";
-import { veniceLanguageModelOptions } from "./venice-chat-options";
+import { veniceLanguageModelOptions, type VeniceLanguageModelOptions } from "./venice-chat-options";
 import { prepareTools } from "./venice-prepare-tools";
 import { prepareVeniceParameters } from "./venice-prepare-parameters";
 
@@ -43,17 +43,9 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
     private async getArgs(options: LanguageModelV3CallOptions) {
         const compatibleOptions = Object.assign(
-            (await parseProviderOptions({
-                provider: this.provider,
-                providerOptions: options.providerOptions,
-                schema: veniceLanguageModelOptions,
-            })) ?? {},
-            (await parseProviderOptions({
-                provider: "openai-compatible",
-                providerOptions: options.providerOptions,
-                schema: veniceLanguageModelOptions,
-            })) ?? {}
-        );
+            (await parseProviderOptions({ provider: this.provider, providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {},
+            (await parseProviderOptions({ provider: "openai-compatible", providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {}
+        ) as VeniceLanguageModelOptions;
 
         const { tools: veniceTools, toolChoice: veniceToolChoice } = prepareTools({
             tools: options.tools,
@@ -65,11 +57,13 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 model: this.modelId,
 
                 max_completion_tokens: compatibleOptions.maxCompletionTokens ?? options.maxOutputTokens,
+
                 temperature: options.temperature,
                 top_p: options.topP,
                 top_k: options.topK,
                 frequency_penalty: options.frequencyPenalty,
                 presence_penalty: options.presencePenalty,
+
                 response_format:
                     options.responseFormat?.type === "json"
                         ? options.responseFormat.schema != null
@@ -89,8 +83,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 stop_token_ids: compatibleOptions.stopTokenIds,
                 seed: options.seed,
 
-                reasoning: compatibleOptions.reasoning,
-                reasoning_effort: compatibleOptions.reasoningEffort,
+                reasoning: undefined,
+                reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
 
                 messages: convertToVeniceChatMessages(prompt),
 
@@ -98,6 +92,18 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 tool_choice: veniceToolChoice,
 
                 venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
+
+                logprobs: compatibleOptions.logprobs,
+                top_logprobs: compatibleOptions.topLogprobs,
+                max_temp: compatibleOptions.maxTemp,
+                min_temp: compatibleOptions.minTemp,
+                min_p: compatibleOptions.minP,
+                n: compatibleOptions.n,
+                user: compatibleOptions.user,
+                stream: compatibleOptions.stream,
+                stream_options: compatibleOptions.streamOptions,
+                repetition_penalty: compatibleOptions.repetitionPenalty,
+                prompt_cache_key: compatibleOptions.promptCacheKey,
             },
         };
     }
