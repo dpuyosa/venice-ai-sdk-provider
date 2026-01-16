@@ -3,6 +3,7 @@ import type { LanguageModelV3, LanguageModelV3CallOptions } from "@ai-sdk/provid
 import { parseProviderOptions, postJsonToApi, type FetchFunction } from "@ai-sdk/provider-utils";
 import { veniceLanguageModelOptions } from "./venice-chat-options";
 import { prepareTools } from "./venice-prepare-tools";
+import { prepareVeniceParameters } from "./venice-prepare-parameters";
 
 export interface VeniceChatConfig {
     provider: string;
@@ -21,11 +22,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     readonly modelId: string;
     readonly config: VeniceChatConfig;
 
-
-    constructor(
-        modelId: string,
-        config: VeniceChatConfig
-    ) {
+    constructor(modelId: string, config: VeniceChatConfig) {
         this.modelId = modelId;
         this.config = config;
     }
@@ -37,9 +34,11 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     }
 
     get supportedUrls() {
-        return this.config.supportedUrls?.() ?? {
-            "image/*": [/^data:image\/(?:jpeg|png|webp);base64,/, /^https?:\/\/.+\.(jpg|jpeg|png|webp)$/i],
-        };
+        return (
+            this.config.supportedUrls?.() ?? {
+                "image/*": [/^data:image\/(?:jpeg|png|webp);base64,/, /^https?:\/\/.+\.(jpg|jpeg|png|webp)$/i],
+            }
+        );
     }
 
     private async getArgs(options: LanguageModelV3CallOptions) {
@@ -50,27 +49,57 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 schema: veniceLanguageModelOptions,
             })) ?? {},
             (await parseProviderOptions({
-                provider: 'openai-compatible',
+                provider: "openai-compatible",
                 providerOptions: options.providerOptions,
                 schema: veniceLanguageModelOptions,
-            })) ?? {},
+            })) ?? {}
         );
 
-        const {
-            tools: openaiTools,
-            toolChoice: openaiToolChoice,
-            toolWarnings,
-        } = prepareTools({
+        const { tools: veniceTools, toolChoice: veniceToolChoice } = prepareTools({
             tools: options.tools,
             toolChoice: options.toolChoice,
         });
 
-
         return {
             args: {
+                model: this.modelId,
 
-            }
-        }
+                max_completion_tokens: compatibleOptions.maxCompletionTokens ?? options.maxOutputTokens,
+                temperature: options.temperature,
+                top_p: options.topP,
+                top_k: options.topK,
+                frequency_penalty: options.frequencyPenalty,
+                presence_penalty: options.presencePenalty,
+                response_format:
+                    options.responseFormat?.type === "json"
+                        ? options.responseFormat.schema != null
+                            ? {
+                                type: "json_schema",
+                                json_schema: {
+                                    schema: options.responseFormat.schema,
+                                    strict: compatibleOptions.structuredOutputs ?? true,
+                                    name: options.responseFormat.name ?? "response",
+                                    description: options.responseFormat.description,
+                                },
+                            }
+                            : { type: "json_object" }
+                        : undefined,
+
+                stop: options.stopSequences,
+                stop_token_ids: compatibleOptions.stopTokenIds,
+                seed: options.seed,
+
+                reasoning: compatibleOptions.reasoning,
+                reasoning_effort: compatibleOptions.reasoningEffort,
+
+                messages: convertToVeniceChatMessages(prompt),
+
+                tools: veniceTools,
+                tool_choice: veniceToolChoice,
+
+                venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
+            },
+        };
     }
 
     async doGenerate(options: LanguageModelV3CallOptions) {
