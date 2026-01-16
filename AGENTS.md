@@ -7,59 +7,47 @@ Follow them for all agentic edits and reviews.
 
 - Package: `@venice/ai-sdk-provider` (TypeScript).
 - Build tool: `tsup` (CJS + ESM + d.ts).
-- Test runner: `vitest` (node + edge configs).
 - Formatting: `prettier` (see `.prettierrc`).
-- Linting: `eslint` (script-based).
 - Type checking: `tsc` strict mode.
 - Node version: `>=18` (package.json).
 
 ## Required Commands
 
-Use `pnpm` unless the user asks otherwise.
+Use `bun` unless the user asks otherwise.
 
 ### Install
 
-- `pnpm install`
+- `bun install`
 
 ### Build
 
-- `pnpm build` (tsup build, outputs `dist/`).
-- `pnpm dev` (tsup watch).
-- `pnpm clean` (remove `dist/`).
-- `pnpm pack` (clean + build + npm pack).
+- `bun run build` (tsup build, outputs `dist/`).
+- `bun run dev` (tsup watch).
+- `bun run clean` (remove `dist/`).
+- `bun run pack` (clean + build + npm pack).
 
 ### Lint / Format
 
-- `pnpm lint` (eslint over `./**/*.ts*`).
-- `pnpm lint-fix` (eslint with `--fix`).
-- `pnpm prettier-check` (prettier check).
-- `pnpm prettier-fix` (prettier write).
-- `pnpm type-check` (`tsc --noEmit`).
+- `bun run prettier-check` (prettier check).
+- `bun run prettier-fix` (prettier write).
+- `bun run type-check` (`tsc --noEmit`).
 
 ### Tests
 
-- `pnpm test` (node + edge).
-- `pnpm test:node` (vitest node config).
-- `pnpm test:edge` (vitest edge config).
-- `pnpm test:watch` (vitest watch, node config).
+When tests are added:
 
-#### Single Test / Focused Run
-
-- By file (node): `pnpm test:node -- path/to/file.test.ts`.
-- By file (edge): `pnpm test:edge -- path/to/file.test.ts`.
-- By test name: `pnpm test:node -- -t "test name"`.
-- By test name (edge): `pnpm test:edge -- -t "test name"`.
-- Add `--runInBand` only if needed (rare).
+- `bun run test` (run all tests).
+- `bun run test:watch` (watch mode).
+- By file: `bun run test -- path/to/file.test.ts`.
+- By test name: `bun run test -- -t "test name"`.
 
 ## Project Layout
 
 - Source: `src/` (library entry is `src/index.ts`).
-- Tests: `tests/` (Vitest).
+- Tests: `tests/` (co-located with source pattern).
 - Build config: `tsup.config.ts`.
 - TS config: `tsconfig.json`.
 - Formatting config: `.prettierrc`.
-
-If files are missing locally, still follow the structure above.
 
 ## Code Style
 
@@ -68,7 +56,7 @@ Prefer small, focused changes that preserve behavior.
 
 ### Formatting (Prettier)
 
-- 2 spaces indentation.
+- 4 spaces indentation (tabWidth: 4).
 - Semicolons required.
 - Double quotes for strings.
 - Trailing commas where valid (es5).
@@ -80,7 +68,7 @@ Prefer small, focused changes that preserve behavior.
 - Use ES module `import`/`export` syntax.
 - Group imports: built-ins, external, then local.
 - Keep import paths explicit and relative unless a package export exists.
-- Avoid unused imports (tsconfig forbids unused).
+- Avoid unused imports.
 - Favor named exports for library surface.
 
 ### Types & Interfaces
@@ -99,7 +87,7 @@ Prefer small, focused changes that preserve behavior.
 - `camelCase` for variables/functions.
 - `PascalCase` for types, interfaces, classes.
 - `UPPER_SNAKE_CASE` for constants.
-- File names should be `kebab-case` or `camelCase` consistently.
+- File names: `kebab-case` for files, `camelCase` for implementation.
 - Prefix internal helpers with `_` only when required.
 
 ### Error Handling
@@ -127,7 +115,7 @@ Prefer small, focused changes that preserve behavior.
 - Use `vitest` style (`describe`, `it`, `expect`).
 - Co-locate tests in `tests/` to match `tsconfig` include.
 - Prefer deterministic tests; avoid real network calls.
-- Mock external calls with `@ai-sdk/test-server` or `@edge-runtime/vm` where relevant.
+- Mock external calls with `@ai-sdk/test-server` where relevant.
 
 ### Build & Packaging
 
@@ -150,10 +138,9 @@ Prefer small, focused changes that preserve behavior.
 
 ## Suggested Review Checklist
 
-- `pnpm lint` passes or is not needed.
-- `pnpm prettier-check` passes.
-- `pnpm type-check` passes.
-- Relevant `pnpm test:*` command passes.
+- `bun run prettier-check` passes.
+- `bun run type-check` passes.
+- Relevant `bun run test` command passes (when tests exist).
 - No unused exports/imports.
 - Public API changes are intentional.
 
