@@ -2,14 +2,16 @@ import type { VeniceChatResponse } from "./venice-response";
 import type { VeniceLanguageModelOptions } from "./venice-chat-options";
 import type { FetchFunction, ResponseHandler } from "@ai-sdk/provider-utils";
 import type { MetadataExtractor, ProviderErrorStructure } from "@ai-sdk/openai-compatible";
-import type { APICallError, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3GenerateResult } from "@ai-sdk/provider";
+import type { APICallError, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3Content, LanguageModelV3GenerateResult, LanguageModelV3StreamResult, SharedV3ProviderMetadata } from "@ai-sdk/provider";
 
 import { prepareTools } from "./venice-prepare-tools";
+import { convertVeniceChatUsage } from "./venice-chat-usage";
 import { defaultVeniceErrorStructure } from "./venice-error";
-import { VeniceChatResponseSchema } from "./venice-response";
 import { veniceLanguageModelOptions } from "./venice-chat-options";
 import { prepareVeniceParameters } from "./venice-prepare-parameters";
-import { combineHeaders, createJsonErrorResponseHandler, createJsonResponseHandler, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
+import { createOpenAICompatibleChatChunkSchema as createVeniceChatChunkSchema, VeniceChatResponseSchema } from "./venice-response";
+import { convertToOpenAICompatibleChatMessages, getResponseMetadata, mapOpenAICompatibleFinishReason } from "@ai-sdk/openai-compatible/internal";
+import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
 
 export interface VeniceChatConfig {
     provider: string;
@@ -29,6 +31,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     readonly config: VeniceChatConfig;
     private readonly failedResponseHandler: ResponseHandler<APICallError>;
     private readonly successfulResponseHandler: ResponseHandler<VeniceChatResponse>;
+    private readonly successfulEventResponseHandler: ResponseHandler;
     private readonly chunkSchema;
 
     constructor(modelId: string, config: VeniceChatConfig) {
@@ -40,11 +43,16 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         this.failedResponseHandler = createJsonErrorResponseHandler(errorStructure);
         this.successfulResponseHandler = createJsonResponseHandler(VeniceChatResponseSchema);
 
-        this.chunkSchema = createOpenAICompatibleChatChunkSchema(errorStructure.errorSchema);
+        this.chunkSchema = createVeniceChatChunkSchema(errorStructure.errorSchema);
+        this.successfulEventResponseHandler = createEventSourceResponseHandler(this.chunkSchema);
     }
 
     get provider(): string {
         return this.config.provider ?? "venice";
+    }
+
+    private get providerOptionsName(): string {
+        return this.config.provider?.split(".")[0]?.trim() ?? "venice";
     }
 
     get supportedUrls() {
@@ -98,7 +106,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             reasoning: undefined,
             reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
 
-            messages: convertToVeniceChatMessages(prompt),
+            messages: convertToOpenAICompatibleChatMessages(options.prompt),
 
             tools: veniceTools,
             tool_choice: veniceToolChoice,
@@ -121,7 +129,11 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
     async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
         const body = await this.getArgs(options);
-        const response = await postJsonToApi({
+        const {
+            responseHeaders,
+            value: responseBody,
+            rawValue: rawResponse,
+        } = await postJsonToApi({
             url: this.config.url({ path: "/chat/completions", modelId: this.modelId }),
             headers: combineHeaders(this.config.headers(), options.headers),
             body,
@@ -131,34 +143,66 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             fetch: this.config.fetch,
         });
 
+        const choice = responseBody.choices[0];
+        const content: Array<LanguageModelV3Content> = [];
+
+        const text = choice?.message.content ?? null;
+        if (text != null && text.length > 0) content.push({ type: "text", text });
+
+        const reasoning = choice?.message.reasoning_content ?? choice?.message.reasoning ?? null;
+        if (reasoning != null && reasoning.length > 0) content.push({ type: "reasoning", text: reasoning });
+
+        if (choice?.message?.tool_calls) {
+            for (const toolCall of choice.message.tool_calls) {
+                const thoughtSignature = toolCall.extra_content?.google?.thought_signature;
+                ({
+                    type: "tool-call",
+                    toolCallId: toolCall.id ?? generateId(),
+                    toolName: toolCall.function.name,
+                    input: toolCall.function.arguments!,
+                    ...(thoughtSignature ? { providerMetadata: { [this.providerOptionsName]: { thoughtSignature } } } : {}),
+                });
+            }
+        }
+
+        const providerMetadata: SharedV3ProviderMetadata = {
+            [this.providerOptionsName]: {},
+            ...(await this.config.metadataExtractor?.extractMetadata?.({ parsedBody: rawResponse })),
+        };
+
         return {
-            content: [
-                {
-                    type: "text" as const,
-                    text: response.choices[0].message.content,
-                },
-            ],
-            finishReason: response.choices[0].finish_reason,
-            usage: {
-                inputTokens: response.usage?.prompt_tokens,
-                outputTokens: response.usage?.completion_tokens,
+            content,
+            finishReason: {
+                unified: mapOpenAICompatibleFinishReason(choice?.finish_reason),
+                raw: choice?.finish_reason ?? undefined,
             },
+            usage: convertVeniceChatUsage(responseBody.usage),
+            providerMetadata,
             request: { body },
-            response: { body: response },
+            response: {
+                ...getResponseMetadata(responseBody),
+                headers: responseHeaders,
+                body: rawResponse,
+            },
+            warnings: [],
         };
     }
 
-    async doStream(options: LanguageModelV3CallOptions) {
-        const body = { ...this.getArgs(options), stream: true };
+    async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        const body = await this.getArgs(options);
+        body.stream = true;
+        body.stream_options = this.config.includeUsage ? { includeUsage: true } : undefined;
 
-        const response = await fetch(`${this.config.baseURL}/chat/completions`, {
-            method: "POST",
-            headers: {
-                ...this.config.headers(),
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-            signal: options.abortSignal,
+        const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
+
+        const { responseHeaders, value: response } = await postJsonToApi({
+            url: this.config.url({ path: "/chat/completions", modelId: this.modelId }),
+            headers: combineHeaders(this.config.headers(), options.headers),
+            body,
+            failedResponseHandler: this.failedResponseHandler,
+            successfulResponseHandler: this.successfulEventResponseHandler,
+            abortSignal: options.abortSignal,
+            fetch: this.config.fetch,
         });
 
         return {
