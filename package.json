@@ -1,6 +1,7 @@
 {
   "name": "@venice/ai-sdk-provider",
   "version": "0.0.1",
+  "description": "Venice AI provider for the Vercel AI SDK",
   "license": "Apache-2.0",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -33,6 +34,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.13",
+    "@ai-sdk/provider": "^3.0.4",
+    "@ai-sdk/provider-utils": "^4.0.8"
   },
   "devDependencies": {
     "@ai-sdk/test-server": "^1.0.1",
