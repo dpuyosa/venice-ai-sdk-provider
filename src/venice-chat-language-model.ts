@@ -233,10 +233,6 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         schema: veniceLanguageModelOptions,
       })) ?? {};
 
-    if (topK != null) {
-      warnings.push({ type: "unsupported", feature: "topK" });
-    }
-
     const {
       tools: mappedTools,
       toolChoice: mappedToolChoice,
@@ -264,6 +260,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         max_tokens: maxOutputTokens,
         temperature,
         top_p: topP,
+        top_k: topK,
         frequency_penalty: frequencyPenalty,
         presence_penalty: presencePenalty,
         response_format:
