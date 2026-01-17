@@ -13,6 +13,7 @@ const veniceTokenUsageSchema = z
             .nullish(),
     })
     .nullish();
+export type VeniceTokenUsage = z.infer<typeof veniceTokenUsageSchema>;
 
 export const VeniceChatResponseSchema = z.looseObject({
     id: z.string().nullish(),
@@ -53,7 +54,7 @@ export const VeniceChatResponseSchema = z.looseObject({
 });
 export type VeniceChatResponse = z.infer<typeof VeniceChatResponseSchema>;
 
-const chunkBaseSchema = z.looseObject({
+export const veniceChunkSchema = z.looseObject({
     id: z.string().nullish(),
     created: z.number().nullish(),
     model: z.string().nullish(),
@@ -96,4 +97,4 @@ const chunkBaseSchema = z.looseObject({
     ),
     usage: veniceTokenUsageSchema,
 });
-export const createOpenAICompatibleChatChunkSchema = <ERROR_SCHEMA extends z.core.$ZodType>(errorSchema: ERROR_SCHEMA) => z.union([chunkBaseSchema, errorSchema]);
+export const createVeniceChatChunkSchema = <ERROR_SCHEMA extends z.ZodType>(errorSchema: ERROR_SCHEMA) => z.union([veniceChunkSchema, errorSchema]);

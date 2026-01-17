@@ -1,17 +1,30 @@
-import type { VeniceChatResponse } from "./venice-response";
+import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from "./venice-response";
 import type { VeniceLanguageModelOptions } from "./venice-chat-options";
-import type { FetchFunction, ResponseHandler } from "@ai-sdk/provider-utils";
+import type { FetchFunction, ParseResult, ResponseHandler } from "@ai-sdk/provider-utils";
 import type { MetadataExtractor, ProviderErrorStructure } from "@ai-sdk/openai-compatible";
-import type { APICallError, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3Content, LanguageModelV3GenerateResult, LanguageModelV3StreamResult, SharedV3ProviderMetadata } from "@ai-sdk/provider";
+import {
+    InvalidResponseDataError,
+    type APICallError,
+    type LanguageModelV3,
+    type LanguageModelV3CallOptions,
+    type LanguageModelV3Content,
+    type LanguageModelV3FinishReason,
+    type LanguageModelV3GenerateResult,
+    type LanguageModelV3StreamPart,
+    type LanguageModelV3StreamResult,
+    type SharedV3ProviderMetadata,
+} from "@ai-sdk/provider";
 
 import { prepareTools } from "./venice-prepare-tools";
 import { convertVeniceChatUsage } from "./venice-chat-usage";
 import { defaultVeniceErrorStructure } from "./venice-error";
 import { veniceLanguageModelOptions } from "./venice-chat-options";
 import { prepareVeniceParameters } from "./venice-prepare-parameters";
-import { createOpenAICompatibleChatChunkSchema as createVeniceChatChunkSchema, VeniceChatResponseSchema } from "./venice-response";
+import { createVeniceChatChunkSchema as createVeniceChatChunkSchema, VeniceChatResponseSchema } from "./venice-response";
 import { convertToOpenAICompatibleChatMessages, getResponseMetadata, mapOpenAICompatibleFinishReason } from "@ai-sdk/openai-compatible/internal";
-import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
+import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
+import type { z } from "zod/v4";
+import { warn } from "node:console";
 
 export interface VeniceChatConfig {
     provider: string;
@@ -31,7 +44,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     readonly config: VeniceChatConfig;
     private readonly failedResponseHandler: ResponseHandler<APICallError>;
     private readonly successfulResponseHandler: ResponseHandler<VeniceChatResponse>;
-    private readonly successfulEventResponseHandler: ResponseHandler;
+    private readonly successfulEventResponseHandler: ResponseHandler<ReadableStream>;
     private readonly chunkSchema;
 
     constructor(modelId: string, config: VeniceChatConfig) {
@@ -44,7 +57,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         this.successfulResponseHandler = createJsonResponseHandler(VeniceChatResponseSchema);
 
         this.chunkSchema = createVeniceChatChunkSchema(errorStructure.errorSchema);
-        this.successfulEventResponseHandler = createEventSourceResponseHandler(this.chunkSchema);
+        this.successfulEventResponseHandler = createEventSourceResponseHandler(createVeniceChatChunkSchema(this.chunkSchema));
     }
 
     get provider(): string {
@@ -75,60 +88,65 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         });
 
         return {
-            model: this.modelId,
+            args: {
+                model: this.modelId,
 
-            max_completion_tokens: compatibleOptions.maxCompletionTokens ?? options.maxOutputTokens,
-            temperature: options.temperature,
-            top_p: options.topP,
-            top_k: options.topK,
-            frequency_penalty: options.frequencyPenalty,
-            presence_penalty: options.presencePenalty,
+                max_completion_tokens: compatibleOptions.maxCompletionTokens ?? options.maxOutputTokens,
+                temperature: options.temperature,
+                top_p: options.topP,
+                top_k: options.topK,
+                frequency_penalty: options.frequencyPenalty,
+                presence_penalty: options.presencePenalty,
 
-            response_format:
-                options.responseFormat?.type === "json"
-                    ? options.responseFormat.schema != null
-                        ? {
-                              type: "json_schema",
-                              json_schema: {
-                                  schema: options.responseFormat.schema,
-                                  strict: compatibleOptions.structuredOutputs ?? true,
-                                  name: options.responseFormat.name ?? "response",
-                                  description: options.responseFormat.description,
-                              },
-                          }
-                        : { type: "json_object" }
-                    : undefined,
+                response_format:
+                    options.responseFormat?.type === "json"
+                        ? options.responseFormat.schema != null
+                            ? {
+                                type: "json_schema",
+                                json_schema: {
+                                    schema: options.responseFormat.schema,
+                                    strict: compatibleOptions.structuredOutputs ?? true,
+                                    name: options.responseFormat.name ?? "response",
+                                    description: options.responseFormat.description,
+                                },
+                            }
+                            : { type: "json_object" }
+                        : undefined,
 
-            stop: options.stopSequences,
-            stop_token_ids: compatibleOptions.stopTokenIds,
-            seed: options.seed,
+                stop: options.stopSequences,
+                stop_token_ids: compatibleOptions.stopTokenIds,
+                seed: options.seed,
 
-            reasoning: undefined,
-            reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
+                reasoning: undefined,
+                reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
 
-            messages: convertToOpenAICompatibleChatMessages(options.prompt),
+                messages: convertToOpenAICompatibleChatMessages(options.prompt),
 
-            tools: veniceTools,
-            tool_choice: veniceToolChoice,
+                tools: veniceTools,
+                tool_choice: veniceToolChoice,
 
-            venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
+                venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
 
-            logprobs: compatibleOptions.logprobs,
-            top_logprobs: compatibleOptions.topLogprobs,
-            max_temp: compatibleOptions.maxTemp,
-            min_temp: compatibleOptions.minTemp,
-            min_p: compatibleOptions.minP,
-            n: compatibleOptions.n,
-            user: compatibleOptions.user,
-            stream: compatibleOptions.stream,
-            stream_options: compatibleOptions.streamOptions,
-            repetition_penalty: compatibleOptions.repetitionPenalty,
-            prompt_cache_key: compatibleOptions.promptCacheKey,
+                logprobs: compatibleOptions.logprobs,
+                top_logprobs: compatibleOptions.topLogprobs,
+                max_temp: compatibleOptions.maxTemp,
+                min_temp: compatibleOptions.minTemp,
+                min_p: compatibleOptions.minP,
+                n: compatibleOptions.n,
+                user: compatibleOptions.user,
+                stream: compatibleOptions.stream,
+                stream_options: compatibleOptions.streamOptions,
+                repetition_penalty: compatibleOptions.repetitionPenalty,
+                prompt_cache_key: compatibleOptions.promptCacheKey,
+            },
+            warnings: [],
         };
     }
 
     async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-        const body = await this.getArgs(options);
+        const { args, warnings } = await this.getArgs(options);
+        const body = JSON.stringify(args);
+
         const {
             responseHeaders,
             value: responseBody,
@@ -184,14 +202,17 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 headers: responseHeaders,
                 body: rawResponse,
             },
-            warnings: [],
+            warnings,
         };
     }
 
     async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-        const body = await this.getArgs(options);
-        body.stream = true;
-        body.stream_options = this.config.includeUsage ? { includeUsage: true } : undefined;
+        const { args, warnings } = await this.getArgs(options);
+        const body = {
+            ...args,
+            stream: true,
+            stream_options: this.config.includeUsage ? { includeUsage: true } : undefined,
+        };
 
         const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
 
@@ -205,8 +226,300 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             fetch: this.config.fetch,
         });
 
+        const toolCalls: Array<{
+            id: string;
+            type: "function";
+            function: { name: string; arguments: string };
+            hasFinished: boolean;
+            thoughtSignature?: string;
+        }> = [];
+
+        let finishReason: LanguageModelV3FinishReason = {
+            unified: "other",
+            raw: undefined,
+        };
+
+        const providerOptionsName = this.providerOptionsName;
+        let usage: VeniceTokenUsage = undefined;
+        let isFirstChunk = true;
+        let isActiveText = false;
+        let isActiveReasoning = false;
+
         return {
-            stream: response.body!,
+            stream: response.pipeThrough(
+                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV3StreamPart>({
+                    start(controller) {
+                        controller.enqueue({ type: "stream-start", warnings });
+                    },
+
+                    transform(chunk, controller) {
+                        if (options.includeRawChunks) {
+                            controller.enqueue({ type: 'raw', rawValue: chunk.rawValue });
+                        }
+
+                        if (!chunk.success) {
+                            finishReason = { unified: 'error', raw: undefined };
+                            controller.enqueue({ type: 'error', error: chunk.error });
+                            return;
+                        }
+
+                        metadataExtractor?.processChunk(chunk.rawValue);
+
+                        if ('error' in chunk.value) {
+                            finishReason = { unified: 'error', raw: undefined };
+                            controller.enqueue({ type: 'error', error: chunk.value.error.message });
+                            return;
+                        }
+
+                        // TODO we lost type safety on Chunk, most likely due to the error schema. MUST FIX
+                        // remove this workaround when the issue is fixed
+                        const value = chunk.value as z.infer<typeof veniceChunkSchema>;
+
+                        if (isFirstChunk) {
+                            isFirstChunk = false;
+
+                            controller.enqueue({
+                                type: 'response-metadata',
+                                ...getResponseMetadata(value),
+                            });
+                        }
+
+                        if (value.usage != null) {
+                            usage = value.usage;
+                        }
+
+                        const choice = value.choices[0];
+
+                        if (choice?.finish_reason != null) {
+                            finishReason = {
+                                unified: mapOpenAICompatibleFinishReason(choice.finish_reason),
+                                raw: choice.finish_reason ?? undefined,
+                            };
+                        }
+
+                        if (choice?.delta == null) {
+                            return;
+                        }
+
+                        const delta = choice.delta;
+
+                        const reasoningContent = delta.reasoning_content ?? delta.reasoning;
+                        if (reasoningContent) {
+                            if (!isActiveReasoning) {
+                                controller.enqueue({
+                                    type: 'reasoning-start',
+                                    id: 'reasoning-0',
+                                });
+                                isActiveReasoning = true;
+                            }
+
+                            controller.enqueue({
+                                type: 'reasoning-delta',
+                                id: 'reasoning-0',
+                                delta: reasoningContent,
+                            });
+                        }
+
+                        if (delta.content) {
+                            // end active reasoning block before text starts
+                            if (isActiveReasoning) {
+                                controller.enqueue({
+                                    type: 'reasoning-end',
+                                    id: 'reasoning-0',
+                                });
+                                isActiveReasoning = false;
+                            }
+
+                            if (!isActiveText) {
+                                controller.enqueue({ type: 'text-start', id: 'txt-0' });
+                                isActiveText = true;
+                            }
+
+                            controller.enqueue({
+                                type: 'text-delta',
+                                id: 'txt-0',
+                                delta: delta.content,
+                            });
+                        }
+
+                        if (delta.tool_calls != null) {
+                            // end active reasoning block before tool calls start
+                            if (isActiveReasoning) {
+                                controller.enqueue({
+                                    type: 'reasoning-end',
+                                    id: 'reasoning-0',
+                                });
+                                isActiveReasoning = false;
+                            }
+
+                            for (const toolCallDelta of delta.tool_calls) {
+                                const index = toolCallDelta.index ?? toolCalls.length;
+
+                                if (toolCalls[index] == null) {
+                                    if (toolCallDelta.id == null) {
+                                        throw new InvalidResponseDataError({
+                                            data: toolCallDelta,
+                                            message: `Expected 'id' to be a string.`,
+                                        });
+                                    }
+
+                                    if (toolCallDelta.function?.name == null) {
+                                        throw new InvalidResponseDataError({
+                                            data: toolCallDelta,
+                                            message: `Expected 'function.name' to be a string.`,
+                                        });
+                                    }
+
+                                    controller.enqueue({
+                                        type: 'tool-input-start',
+                                        id: toolCallDelta.id,
+                                        toolName: toolCallDelta.function.name,
+                                    });
+
+                                    toolCalls[index] = {
+                                        id: toolCallDelta.id,
+                                        type: 'function',
+                                        function: {
+                                            name: toolCallDelta.function.name,
+                                            arguments: toolCallDelta.function.arguments ?? ''
+                                        },
+                                        hasFinished: false,
+                                        thoughtSignature: toolCallDelta.extra_content?.google?.thought_signature ?? undefined
+                                    };
+
+                                    const toolCall = toolCalls[index];
+
+                                    if (toolCall.function?.name != null && toolCall.function?.arguments != null) {
+                                        // send delta if the argument text has already started:
+                                        if (toolCall.function.arguments.length > 0) {
+                                            controller.enqueue({
+                                                type: 'tool-input-delta',
+                                                id: toolCall.id,
+                                                delta: toolCall.function.arguments,
+                                            });
+                                        }
+
+                                        // check if tool call is complete
+                                        // (some providers send the full tool call in one chunk):
+                                        if (isParsableJson(toolCall.function.arguments)) {
+                                            controller.enqueue({
+                                                type: 'tool-input-end',
+                                                id: toolCall.id,
+                                            });
+
+                                            controller.enqueue({
+                                                type: 'tool-call',
+                                                toolCallId: toolCall.id ?? generateId(),
+                                                toolName: toolCall.function.name,
+                                                input: toolCall.function.arguments,
+                                                ...(toolCall.thoughtSignature
+                                                    ? {
+                                                        providerMetadata: {
+                                                            [providerOptionsName]: {
+                                                                thoughtSignature: toolCall.thoughtSignature,
+                                                            },
+                                                        },
+                                                    }
+                                                    : {}),
+                                            });
+                                            toolCall.hasFinished = true;
+                                        }
+                                    }
+
+                                    continue;
+                                }
+
+                                // existing tool call, merge if not finished
+                                const toolCall = toolCalls[index];
+
+                                if (toolCall.hasFinished)
+                                    continue;
+
+                                if (toolCallDelta.function?.arguments != null)
+                                    toolCall.function!.arguments += toolCallDelta.function?.arguments ?? '';
+
+                                // send delta
+                                controller.enqueue({
+                                    type: 'tool-input-delta',
+                                    id: toolCall.id,
+                                    delta: toolCallDelta.function.arguments ?? '',
+                                });
+
+                                // check if tool call is complete
+                                if (toolCall.function?.name != null && toolCall.function?.arguments != null && isParsableJson(toolCall.function.arguments)) {
+                                    controller.enqueue({
+                                        type: 'tool-input-end',
+                                        id: toolCall.id,
+                                    });
+
+                                    controller.enqueue({
+                                        type: 'tool-call',
+                                        toolCallId: toolCall.id ?? generateId(),
+                                        toolName: toolCall.function.name,
+                                        input: toolCall.function.arguments,
+                                        ...(toolCall.thoughtSignature
+                                            ? {
+                                                providerMetadata: {
+                                                    [providerOptionsName]: {
+                                                        thoughtSignature: toolCall.thoughtSignature,
+                                                    },
+                                                },
+                                            }
+                                            : {}),
+                                    });
+                                    toolCall.hasFinished = true;
+                                }
+                            }
+                        }
+                    },
+
+                    flush(controller) {
+                        if (isActiveReasoning)
+                            controller.enqueue({ type: 'reasoning-end', id: 'reasoning-0' });
+
+                        if (isActiveText)
+                            controller.enqueue({ type: 'text-end', id: 'txt-0' });
+
+                        // go through all tool calls and send the ones that are not finished
+                        for (const toolCall of toolCalls.filter(toolCall => !toolCall.hasFinished)) {
+                            controller.enqueue({
+                                type: 'tool-input-end',
+                                id: toolCall.id,
+                            });
+
+                            controller.enqueue({
+                                type: 'tool-call',
+                                toolCallId: toolCall.id ?? generateId(),
+                                toolName: toolCall.function.name,
+                                input: toolCall.function.arguments,
+                                ...(toolCall.thoughtSignature
+                                    ? {
+                                        providerMetadata: {
+                                            [providerOptionsName]: {
+                                                thoughtSignature: toolCall.thoughtSignature,
+                                            },
+                                        },
+                                    }
+                                    : {}),
+                            });
+                        }
+
+                        const providerMetadata: SharedV3ProviderMetadata = {
+                            [providerOptionsName]: {},
+                            ...metadataExtractor?.buildMetadata(),
+                        };
+
+                        controller.enqueue({
+                            type: 'finish',
+                            finishReason,
+                            usage: convertVeniceChatUsage(usage),
+                            providerMetadata,
+                        });
+                    },
+                }),
+            ),
+            request: { body },
+            response: { headers: responseHeaders },
         };
     }
 }
