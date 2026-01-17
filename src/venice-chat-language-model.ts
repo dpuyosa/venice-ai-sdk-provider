@@ -5,14 +5,14 @@ import type { MetadataExtractor, ProviderErrorStructure } from "@ai-sdk/openai-c
 import {
     InvalidResponseDataError,
     type APICallError,
-    type LanguageModelV3,
-    type LanguageModelV3CallOptions,
-    type LanguageModelV3Content,
-    type LanguageModelV3FinishReason,
-    type LanguageModelV3GenerateResult,
-    type LanguageModelV3StreamPart,
-    type LanguageModelV3StreamResult,
-    type SharedV3ProviderMetadata,
+    type LanguageModelV2,
+    type LanguageModelV2CallOptions,
+    type LanguageModelV2Content,
+    type LanguageModelV2FinishReason,
+    type LanguageModelV2GenerateResult,
+    type LanguageModelV2StreamPart,
+    type LanguageModelV2StreamResult,
+    type SharedV2ProviderMetadata,
 } from "@ai-sdk/provider";
 
 import { prepareTools } from "./venice-prepare-tools";
@@ -34,11 +34,11 @@ export interface VeniceChatConfig {
     errorStructure?: ProviderErrorStructure<any>;
     metadataExtractor?: MetadataExtractor;
     supportsStructuredOutputs?: boolean;
-    supportedUrls?: () => LanguageModelV3["supportedUrls"];
+    supportedUrls?: () => LanguageModelV2["supportedUrls"];
 }
 
-export class VeniceChatLanguageModel implements LanguageModelV3 {
-    readonly specificationVersion = "v3";
+export class VeniceChatLanguageModel implements LanguageModelV2 {
+    readonly specificationVersion = "v2";
     readonly modelId: string;
     readonly config: VeniceChatConfig;
     private readonly failedResponseHandler: ResponseHandler<APICallError>;
@@ -75,7 +75,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         );
     }
 
-    private async getArgs(options: LanguageModelV3CallOptions) {
+    private async getArgs(options: LanguageModelV2CallOptions) {
         const compatibleOptions = Object.assign(
             (await parseProviderOptions({ provider: this.provider, providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {},
             (await parseProviderOptions({ provider: "openai-compatible", providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {}
@@ -142,7 +142,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         };
     }
 
-    async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+    async doGenerate(options: LanguageModelV2CallOptions): Promise<LanguageModelV2GenerateResult> {
         const { args, warnings } = await this.getArgs(options);
         const body = JSON.stringify(args);
 
@@ -161,7 +161,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         });
 
         const choice = responseBody.choices[0];
-        const content: Array<LanguageModelV3Content> = [];
+        const content: Array<LanguageModelV2Content> = [];
 
         const text = choice?.message.content ?? null;
         if (text != null && text.length > 0) content.push({ type: "text", text });
@@ -182,7 +182,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             }
         }
 
-        const providerMetadata: SharedV3ProviderMetadata = {
+        const providerMetadata: SharedV2ProviderMetadata = {
             [this.providerOptionsName]: {},
             ...(await this.config.metadataExtractor?.extractMetadata?.({ parsedBody: rawResponse })),
         };
@@ -205,7 +205,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         };
     }
 
-    async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+    async doStream(options: LanguageModelV2CallOptions): Promise<LanguageModelV2StreamResult> {
         const { args, warnings } = await this.getArgs(options);
         const body = {
             ...args,
@@ -233,7 +233,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             thoughtSignature?: string;
         }> = [];
 
-        let finishReason: LanguageModelV3FinishReason = {
+        let finishReason: LanguageModelV2FinishReason = {
             unified: "other",
             raw: undefined,
         };
@@ -246,7 +246,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
         return {
             stream: response.pipeThrough(
-                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV3StreamPart>({
+                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV2StreamPart>({
                     start(controller) {
                         controller.enqueue({ type: "stream-start", warnings });
                     },
@@ -503,7 +503,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                             });
                         }
 
-                        const providerMetadata: SharedV3ProviderMetadata = {
+                        const providerMetadata: SharedV2ProviderMetadata = {
                             [providerOptionsName]: {},
                             ...metadataExtractor?.buildMetadata(),
                         };

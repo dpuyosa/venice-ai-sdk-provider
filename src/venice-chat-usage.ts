@@ -1,7 +1,7 @@
 import type { VeniceChatResponse } from "./venice-response";
-import type { LanguageModelV3Usage } from "@ai-sdk/provider";
+import type { LanguageModelV2Usage } from "@ai-sdk/provider";
 
-export function convertVeniceChatUsage(usage: VeniceChatResponse["usage"]): LanguageModelV3Usage {
+export function convertVeniceChatUsage(usage: VeniceChatResponse["usage"]): LanguageModelV2Usage {
     if (usage == null) {
         return {
             inputTokens: {
