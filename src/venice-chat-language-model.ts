@@ -24,7 +24,6 @@ import { createVeniceChatChunkSchema as createVeniceChatChunkSchema, VeniceChatR
 import { convertToOpenAICompatibleChatMessages, getResponseMetadata, mapOpenAICompatibleFinishReason } from "@ai-sdk/openai-compatible/internal";
 import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
 import type { z } from "zod/v4";
-import { warn } from "node:console";
 
 export interface VeniceChatConfig {
     provider: string;
