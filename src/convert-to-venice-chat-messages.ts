@@ -3,7 +3,6 @@ import type { LanguageModelV2Prompt, SharedV2ProviderMetadata } from '@ai-sdk/pr
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 import type { VeniceChatPrompt } from './venice-chat-message';
 import { convertToBase64 } from '@ai-sdk/provider-utils';
-import { meta } from 'zod/v4/core';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata }) {
     return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
@@ -17,7 +16,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                 const partMetadata = getVeniceMetadata({ providerOptions });
                 messages.push({
                     role: 'system',
-                    content: partMetadata ? [{ type: 'text', text: content, ...partMetadata }] : content,
+                    content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content, ...partMetadata }] : content,
                 });
                 break;
             }
@@ -27,7 +26,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     const partMetadata = getVeniceMetadata(content[0]);
                     messages.push({
                         role: 'user',
-                        content: partMetadata ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                     break;
@@ -45,7 +44,9 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                                 if (part.mediaType.startsWith('image/')) {
                                     return {
                                         type: 'image_url',
-                                        image_url: part.data instanceof URL ? part.data.toString() : `data:${part.mediaType};base64,${convertToBase64(part.data)}`,
+                                        image_url: {
+                                            url: part.data instanceof URL ? part.data.toString() : `data:${part.mediaType};base64,${convertToBase64(part.data)}`,
+                                        },
                                         ...partMetadata,
                                     };
                                 } else {
@@ -66,7 +67,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     const partMetadata = getVeniceMetadata(content[0]);
                     messages.push({
                         role: 'assistant',
-                        content: partMetadata ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                     break;
@@ -105,7 +106,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
 
                 messages.push({
                     role: 'assistant',
-                    content: Object.keys(assistantMetadata) || assistantText ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : '',
+                    content: Object.keys(assistantMetadata).length > 0 || assistantText ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : '',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
                     ...getVeniceMetadata({ providerOptions }),
                 });
@@ -134,7 +135,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     messages.push({
                         role: 'tool',
                         tool_call_id: toolResponse.toolCallId,
-                        content: partMetadata ? [{ type: 'text', text: contentValue, ...partMetadata }] : contentValue,
+                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: contentValue, ...partMetadata }] : contentValue,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                 }
