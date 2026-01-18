@@ -8,17 +8,26 @@ export type VeniceMessage = VeniceSystemMessage | VeniceUserMessage | VeniceAssi
 // provider-metadata-specific extensibility.
 type JsonRecord<T = never> = Record<string, JSONValue | JSONValue[] | T | T[] | undefined>;
 
-export interface VeniceSystemMessage extends JsonRecord {
+export interface VeniceSystemMessage extends JsonRecord<VeniceContentPartText> {
     role: 'system';
-    content: string;
+    content: string | Array<VeniceContentPartText>;
 }
 
-export interface VeniceUserMessage extends JsonRecord<VeniceContentPart> {
+export interface VeniceUserMessage extends JsonRecord<VeniceContentPartText | VeniceContentPartImage> {
     role: 'user';
-    content: string | Array<VeniceContentPart>;
+    content: string | Array<VeniceContentPartText | VeniceContentPartImage>;
+}
+export interface VeniceAssistantMessage extends JsonRecord<VeniceContentPartText | VeniceMessageToolCall> {
+    role: 'assistant';
+    content: string | Array<VeniceContentPartText>;
+    tool_calls?: Array<VeniceMessageToolCall>;
 }
 
-export type VeniceContentPart = VeniceContentPartText | VeniceContentPartImage;
+export interface VeniceToolMessage extends JsonRecord<VeniceContentPartText> {
+    role: 'tool';
+    content: string | Array<VeniceContentPartText>;
+    tool_call_id: string;
+}
 
 export interface VeniceContentPartImage extends JsonRecord {
     type: 'image_url';
@@ -30,12 +39,6 @@ export interface VeniceContentPartText extends JsonRecord {
     text: string;
 }
 
-export interface VeniceAssistantMessage extends JsonRecord<VeniceMessageToolCall> {
-    role: 'assistant';
-    content?: string | null;
-    tool_calls?: Array<VeniceMessageToolCall>;
-}
-
 export interface VeniceMessageToolCall extends JsonRecord {
     type: 'function';
     id: string;
@@ -43,10 +46,4 @@ export interface VeniceMessageToolCall extends JsonRecord {
         arguments: string;
         name: string;
     };
-}
-
-export interface VeniceToolMessage extends JsonRecord {
-    role: 'tool';
-    content: string;
-    tool_call_id: string;
 }

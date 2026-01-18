@@ -1,7 +1,7 @@
 import type { LanguageModelV2Prompt, SharedV2ProviderMetadata } from '@ai-sdk/provider';
 
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
-import type { VeniceChatPrompt } from './venice-chat-parts';
+import type { VeniceChatPrompt } from './venice-chat-message';
 import { convertToBase64 } from '@ai-sdk/provider-utils';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata }) {
