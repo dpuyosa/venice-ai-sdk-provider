@@ -5,29 +5,29 @@ export type VeniceChatModelId = string;
 export const veniceLanguageModelOptions = z.object({
     veniceParameters: z
         .object({
-            enableWebSearch: z.enum(['off', 'on', 'auto']).default('off'),
-            enableWebScraping: z.boolean(),
-            enableWebCitations: z.boolean(),
-            stripThinkingResponse: z.boolean(),
-            disableThinking: z.boolean(),
+            enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
+            enableWebScraping: z.boolean().optional(),
+            enableWebCitations: z.boolean().optional(),
+            stripThinkingResponse: z.boolean().optional(),
+            disableThinking: z.boolean().optional(),
             includeVeniceSystemPrompt: z.boolean().default(false),
-            characterSlug: z.string(),
-            includeSearchResultsInStream: z.boolean(),
-            returnSearchResultsAsDocuments: z.boolean(),
+            characterSlug: z.string().optional(),
+            includeSearchResultsInStream: z.boolean().optional(),
+            returnSearchResultsAsDocuments: z.boolean().optional(),
         })
-        .optional(),
+        .default({ includeVeniceSystemPrompt: false }),
 
-    topLogprobs: z.number().int().min(0),
+    topLogprobs: z.int().positive().optional(),
 
-    maxCompletionTokens: z.number().int(),
+    maxCompletionTokens: z.int().positive().optional(),
 
-    maxTokens: z.number().int(),
+    maxTokens: z.int().positive().optional(),
 
-    minP: z.number().min(0).max(1),
+    minP: z.int().positive().max(1).optional(),
 
-    promptCacheKey: z.string(),
+    promptCacheKey: z.string().optional(),
 
-    repetitionPenalty: z.number().min(0),
+    repetitionPenalty: z.int().positive().optional(),
 
     reasoning: z
         .object({
@@ -37,9 +37,9 @@ export const veniceLanguageModelOptions = z.object({
 
     reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
 
-    stopTokenIds: z.array(z.number()),
+    stopTokenIds: z.array(z.number()).optional(),
 
-    stream: z.boolean(),
+    stream: z.boolean().default(false),
 
     streamOptions: z
         .object({
@@ -47,19 +47,19 @@ export const veniceLanguageModelOptions = z.object({
         })
         .optional(),
 
-    user: z.string(),
+    user: z.string().optional(),
 
-    structuredOutputs: z.boolean(),
+    structuredOutputs: z.boolean().optional(),
 
-    parallelToolCalls: z.boolean(),
+    parallelToolCalls: z.boolean().optional(),
 
-    logprobs: z.boolean(),
+    logprobs: z.boolean().optional(),
 
-    maxTemp: z.number().min(0).max(2),
+    maxTemp: z.number().min(0).max(2).optional(),
 
-    minTemp: z.number().min(0).max(2),
+    minTemp: z.number().min(0).max(2).optional(),
 
-    n: z.number().int().min(1).default(1),
+    n: z.int().min(1).default(1),
 });
 
 export type VeniceLanguageModelOptions = z.infer<typeof veniceLanguageModelOptions>;

@@ -75,7 +75,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
     private async getArgs(options: LanguageModelV2CallOptions) {
         const compatibleOptions = Object.assign(
-            (await parseProviderOptions({ provider: this.provider, providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {},
+            (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {},
             (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {}
         ) as VeniceLanguageModelOptions;
 

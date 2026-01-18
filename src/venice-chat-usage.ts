@@ -11,8 +11,8 @@ export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): Lang
     }
 
     return {
-        inputTokens: usage.prompt_tokens ?? 0,
-        outputTokens: usage.completion_tokens ?? 0,
+        inputTokens: usage.prompt_tokens ?? undefined,
+        outputTokens: usage.completion_tokens ?? undefined,
         totalTokens: usage.total_tokens ?? undefined,
         cachedInputTokens: usage.prompt_tokens_details?.cached_tokens ?? undefined,
     };
