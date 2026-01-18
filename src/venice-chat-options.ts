@@ -2,20 +2,20 @@ import { z } from 'zod/v4';
 
 export type VeniceChatModelId = string;
 
+export const veniceParametersSchema = z.object({
+    enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
+    enableWebScraping: z.boolean().optional(),
+    enableWebCitations: z.boolean().optional(),
+    stripThinkingResponse: z.boolean().optional(),
+    disableThinking: z.boolean().optional(),
+    includeVeniceSystemPrompt: z.boolean().default(false),
+    characterSlug: z.string().optional(),
+    includeSearchResultsInStream: z.boolean().optional(),
+    returnSearchResultsAsDocuments: z.boolean().optional(),
+});
+
 export const veniceLanguageModelOptions = z.object({
-    veniceParameters: z
-        .object({
-            enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
-            enableWebScraping: z.boolean().optional(),
-            enableWebCitations: z.boolean().optional(),
-            stripThinkingResponse: z.boolean().optional(),
-            disableThinking: z.boolean().optional(),
-            includeVeniceSystemPrompt: z.boolean().default(false),
-            characterSlug: z.string().optional(),
-            includeSearchResultsInStream: z.boolean().optional(),
-            returnSearchResultsAsDocuments: z.boolean().optional(),
-        })
-        .default({ includeVeniceSystemPrompt: false }),
+    veniceParameters: veniceParametersSchema.default({ includeVeniceSystemPrompt: false }),
 
     topLogprobs: z.int().positive().optional(),
 
