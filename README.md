@@ -30,7 +30,7 @@ import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const { text } = await generateText({
-  model: venice("zai-org-glm-4.6"),
+  model: venice("zai-org-glm-4.7"),
   prompt: "Write a vegetarian lasagna recipe for 4 people.",
 });
 ```
@@ -50,7 +50,7 @@ import { createVenice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const venice = createVenice({ apiKey: "your-api-key" });
-const model = venice("zai-org-glm-4.6");
+const model = venice("zai-org-glm-4.7");
 
 const { text } = await generateText({
   model,
@@ -115,7 +115,7 @@ import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const { text } = await generateText({
-  model: venice("zai-org-glm-4.6"),
+  model: venice("zai-org-glm-4.7"),
   tools: {
     get_weather: {
       description: "Get current weather for a location",
