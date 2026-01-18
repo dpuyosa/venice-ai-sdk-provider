@@ -102,6 +102,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     }
                 }
 
+                assistantText = assistantText === '' && Object.keys(assistantMetadata).length > 0 ? '...' : assistantText;
                 messages.push({
                     role: 'assistant',
                     content: Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
