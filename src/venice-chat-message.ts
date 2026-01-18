@@ -1,8 +1,11 @@
 import type { JSONValue } from '@ai-sdk/provider';
 
 export type VeniceChatPrompt = Array<VeniceMessage>;
-
 export type VeniceMessage = VeniceSystemMessage | VeniceUserMessage | VeniceAssistantMessage | VeniceToolMessage;
+
+export type VeniceContentPartText = { type: 'text'; text: string }
+export type VeniceContentPartImage = { type: 'image_url'; image_url: { url: string } }
+export type VeniceUserMessageContentPart = VeniceContentPartText | VeniceContentPartImage;
 
 // Allow for arbitrary additional properties for general purpose
 // provider-metadata-specific extensibility.
@@ -15,7 +18,7 @@ export interface VeniceSystemMessage extends JsonRecord<VeniceContentPartText> {
 
 export interface VeniceUserMessage extends JsonRecord<VeniceContentPartText | VeniceContentPartImage> {
     role: 'user';
-    content: string | Array<VeniceContentPartText | VeniceContentPartImage>;
+    content: string | Array<VeniceUserMessageContentPart>;
 }
 export interface VeniceAssistantMessage extends JsonRecord<VeniceContentPartText | VeniceMessageToolCall> {
     role: 'assistant';
@@ -29,17 +32,8 @@ export interface VeniceToolMessage extends JsonRecord<VeniceContentPartText> {
     tool_call_id: string;
 }
 
-export interface VeniceContentPartImage extends JsonRecord {
-    type: 'image_url';
-    image_url: { url: string };
-}
 
-export interface VeniceContentPartText extends JsonRecord {
-    type: 'text';
-    text: string;
-}
-
-export interface VeniceMessageToolCall extends JsonRecord {
+export type VeniceMessageToolCall = {
     type: 'function';
     id: string;
     function: {

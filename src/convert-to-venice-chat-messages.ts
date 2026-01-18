@@ -3,6 +3,7 @@ import type { LanguageModelV2Prompt, SharedV2ProviderMetadata } from '@ai-sdk/pr
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 import type { VeniceChatPrompt } from './venice-chat-message';
 import { convertToBase64 } from '@ai-sdk/provider-utils';
+import { meta } from 'zod/v4/core';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata }) {
     return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
@@ -10,20 +11,24 @@ function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata
 
 export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): VeniceChatPrompt {
     const messages: VeniceChatPrompt = [];
-    for (const { role, content, ...message } of prompt) {
-        const metadata = getVeniceMetadata({ ...message });
+    for (const { role, content, providerOptions } of prompt) {
         switch (role) {
             case 'system': {
-                messages.push({ role: 'system', content, ...metadata });
+                const partMetadata = getVeniceMetadata({ providerOptions });
+                messages.push({
+                    role: 'system',
+                    content: partMetadata ? [{ type: 'text', text: content, ...partMetadata }] : content,
+                });
                 break;
             }
 
             case 'user': {
                 if (content.length === 1 && content[0]?.type === 'text') {
+                    const partMetadata = getVeniceMetadata(content[0]);
                     messages.push({
                         role: 'user',
-                        content: content[0].text,
-                        ...getVeniceMetadata(content[0]),
+                        content: partMetadata ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+                        ...getVeniceMetadata({ providerOptions }),
                     });
                     break;
                 }
@@ -38,13 +43,9 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                             }
                             case 'file': {
                                 if (part.mediaType.startsWith('image/')) {
-                                    const mediaType = part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
-
                                     return {
                                         type: 'image_url',
-                                        image_url: {
-                                            url: part.data instanceof URL ? part.data.toString() : `data:${mediaType};base64,${convertToBase64(part.data)}`,
-                                        },
+                                        image_url: part.data instanceof URL ? part.data.toString() : `data:${part.mediaType};base64,${convertToBase64(part.data)}`,
                                         ...partMetadata,
                                     };
                                 } else {
@@ -55,25 +56,35 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                             }
                         }
                     }),
-                    ...metadata,
+                    ...getVeniceMetadata({ providerOptions }),
                 });
-
                 break;
             }
 
             case 'assistant': {
-                let text = '';
-                const toolCalls: Array<{
-                    id: string;
-                    type: 'function';
-                    function: { name: string; arguments: string };
-                }> = [];
+                if (content.length === 1 && content[0]?.type === 'text') {
+                    const partMetadata = getVeniceMetadata(content[0]);
+                    messages.push({
+                        role: 'assistant',
+                        content: partMetadata ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+                        ...getVeniceMetadata({ providerOptions }),
+                    });
+                    break;
+                }
+
+                let assistantText = '';
+                let assistantMetadata = {};
+                const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
                 for (const part of content) {
                     const partMetadata = getVeniceMetadata(part);
                     switch (part.type) {
                         case 'text': {
-                            text += part.text;
+                            assistantText += part.text;
+                            assistantMetadata = {
+                                ...assistantMetadata,
+                                ...partMetadata,
+                            };
                             break;
                         }
                         case 'tool-call': {
@@ -88,14 +99,15 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                             });
                             break;
                         }
+                        // case 'reasoning': { }
                     }
                 }
 
                 messages.push({
                     role: 'assistant',
-                    content: text,
+                    content: Object.keys(assistantMetadata) || assistantText ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : '',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-                    ...metadata,
+                    ...getVeniceMetadata({ providerOptions }),
                 });
 
                 break;
@@ -103,6 +115,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
 
             case 'tool': {
                 for (const toolResponse of content) {
+                    const partMetadata = getVeniceMetadata(toolResponse);
                     const output = toolResponse.output;
 
                     let contentValue: string;
@@ -118,12 +131,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                             break;
                     }
 
-                    const toolResponseMetadata = getVeniceMetadata(toolResponse);
                     messages.push({
                         role: 'tool',
                         tool_call_id: toolResponse.toolCallId,
-                        content: contentValue,
-                        ...toolResponseMetadata,
+                        content: partMetadata ? [{ type: 'text', text: contentValue, ...partMetadata }] : contentValue,
+                        ...getVeniceMetadata({ providerOptions }),
                     });
                 }
                 break;
