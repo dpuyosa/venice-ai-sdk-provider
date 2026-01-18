@@ -78,14 +78,13 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
                 for (const part of content) {
-                    const partMetadata = getVeniceMetadata(part);
+                    assistantMetadata = {
+                        ...assistantMetadata,
+                        ...getVeniceMetadata(part),
+                    };
                     switch (part.type) {
                         case 'text': {
                             assistantText += part.text;
-                            assistantMetadata = {
-                                ...assistantMetadata,
-                                ...partMetadata,
-                            };
                             break;
                         }
                         case 'tool-call': {
@@ -96,7 +95,6 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                                     name: part.toolName,
                                     arguments: JSON.stringify(part.input),
                                 },
-                                ...partMetadata,
                             });
                             break;
                         }
@@ -106,7 +104,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
 
                 messages.push({
                     role: 'assistant',
-                    content: Object.keys(assistantMetadata).length > 0 || assistantText ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : '',
+                    content: Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
                     ...getVeniceMetadata({ providerOptions }),
                 });
