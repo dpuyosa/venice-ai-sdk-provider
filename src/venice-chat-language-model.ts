@@ -1,27 +1,20 @@
-import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
+import type { z } from 'zod/v4';
 import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
 import type { MetadataExtractor, ProviderErrorStructure } from '@ai-sdk/openai-compatible';
-import {
-    InvalidResponseDataError,
-    type APICallError,
-    type LanguageModelV2,
-    type LanguageModelV2CallOptions,
-    type LanguageModelV2Content,
-    type LanguageModelV2FinishReason,
-    type LanguageModelV2StreamPart,
-    type SharedV2ProviderMetadata,
-} from '@ai-sdk/provider';
+import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
+import type { APICallError, LanguageModelV2, LanguageModelV2CallOptions, LanguageModelV2Content, LanguageModelV2FinishReason, LanguageModelV2StreamPart, SharedV2ProviderMetadata } from '@ai-sdk/provider';
 
 import { prepareTools } from './venice-prepare-tools';
+import { InvalidResponseDataError } from '@ai-sdk/provider';
 import { convertVeniceChatUsage } from './venice-chat-usage';
 import { defaultVeniceErrorStructure } from './venice-error';
 import { veniceLanguageModelOptions } from './venice-chat-options';
 import { prepareVeniceParameters } from './venice-prepare-parameters';
-import { createVeniceChatChunkSchema as createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
-import { convertToOpenAICompatibleChatMessages, getResponseMetadata, mapOpenAICompatibleFinishReason } from '@ai-sdk/openai-compatible/internal';
+import { convertToVeniceChatMessages } from './convert-to-venice-chat-messages';
+import { createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
+import { getResponseMetadata, mapOpenAICompatibleFinishReason } from '@ai-sdk/openai-compatible/internal';
 import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
-import type { z } from 'zod/v4';
 
 export interface VeniceChatConfig {
     provider: string;
@@ -117,7 +110,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                 reasoning: undefined,
                 reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
 
-                messages: convertToOpenAICompatibleChatMessages(options.prompt),
+                messages: convertToVeniceChatMessages(options.prompt),
 
                 tools: veniceTools,
                 tool_choice: veniceToolChoice,
