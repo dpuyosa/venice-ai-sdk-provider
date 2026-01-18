@@ -1,4 +1,4 @@
-import type { LanguageModelV2CallOptions, SharedV2Warning } from "@ai-sdk/provider";
+import type { LanguageModelV2CallOptions, LanguageModelV2CallWarning } from "@ai-sdk/provider";
 
 import { UnsupportedFunctionalityError } from "@ai-sdk/provider";
 
@@ -15,12 +15,12 @@ export function prepareTools({ tools, toolChoice }: { tools: LanguageModelV2Call
               };
           }>;
     toolChoice: { type: "function"; function: { name: string } } | "auto" | "none" | "required" | undefined;
-    toolWarnings: SharedV2Warning[];
+    toolWarnings: LanguageModelV2CallWarning[];
 } {
     // when the tools array is empty, change it to undefined to prevent errors:
     tools = tools?.length ? tools : undefined;
 
-    const toolWarnings: SharedV2Warning[] = [];
+    const toolWarnings: LanguageModelV2CallWarning[] = [];
 
     if (tools == null) {
         return { tools: undefined, toolChoice: undefined, toolWarnings };
@@ -37,10 +37,10 @@ export function prepareTools({ tools, toolChoice }: { tools: LanguageModelV2Call
     }> = [];
 
     for (const tool of tools) {
-        if (tool.type === "provider") {
+        if (tool.type === "provider-defined") {
             toolWarnings.push({
-                type: "unsupported",
-                feature: `provider-defined tool ${tool.id}`,
+                type: "unsupported-tool",
+                tool,
             });
         } else {
             openaiCompatTools.push({
@@ -49,7 +49,6 @@ export function prepareTools({ tools, toolChoice }: { tools: LanguageModelV2Call
                     name: tool.name,
                     description: tool.description,
                     parameters: tool.inputSchema,
-                    ...(tool.strict != null ? { strict: tool.strict } : {}),
                 },
             });
         }

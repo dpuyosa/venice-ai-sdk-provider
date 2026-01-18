@@ -4,7 +4,7 @@ import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { VERSION } from "./version";
 import { VeniceChatLanguageModel } from "./venice-chat-language-model";
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from "@ai-sdk/provider-utils";
-import { OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from "@ai-sdk/openai-compatible";
+import { OpenAICompatibleCompletionLanguageModel, OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from "@ai-sdk/openai-compatible";
 
 export interface VeniceProviderSettings {
     /**
@@ -87,8 +87,6 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
         fetch: options.fetch,
     });
 
-    const createLanguageModel = (modelId: string) => createChatModel(modelId);
-
     const createChatModel = (modelId: string) =>
         new VeniceChatLanguageModel(modelId, {
             ...getCommonModelConfig("chat"),
@@ -96,16 +94,22 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
             supportsStructuredOutputs: options.supportsStructuredOutputs,
         });
 
+    const createLanguageModel = (modelId: string) => createChatModel(modelId);
+    const createCompletionModel = (modelId: string) => new OpenAICompatibleCompletionLanguageModel(modelId, { ...getCommonModelConfig("completion"), includeUsage: options.includeUsage });
     const createImageModel = (modelId: string) => new OpenAICompatibleImageModel(modelId, getCommonModelConfig("image"));
     const createEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getCommonModelConfig("embedding"));
 
-    const provider = (modelId: string) => createChatModel(modelId);
+    const provider = (modelId: string) => createLanguageModel(modelId);
     provider.specificationVersion = "v2" as const;
-    provider.languageModel = createLanguageModel;
     provider.chatModel = createChatModel;
 
+    provider.languageModel = createLanguageModel;
     provider.imageModel = createImageModel;
     provider.embeddingModel = createEmbeddingModel;
+    provider.completionModel = createCompletionModel;
+
+    // V2
+    provider.textEmbeddingModel = provider.embeddingModel;
 
     return provider as VeniceProvider;
 }
