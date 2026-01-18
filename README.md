@@ -6,27 +6,27 @@ The [Venice](https://venice.ai/) provider for the [Vercel AI SDK](https://sdk.ve
 
 ```bash
 # For pnpm
-pnpm add @venice/ai-sdk-provider
+pnpm add venice-ai-sdk-provider
 
 # For npm
-npm install @venice/ai-sdk-provider
+npm install venice-ai-sdk-provider
 
 # For yarn
-yarn add @venice/ai-sdk-provider
+yarn add venice-ai-sdk-provider
 ```
 
 ## Provider Instance
 
-You can import the default provider instance `venice` from `@venice/ai-sdk-provider`:
+You can import the default provider instance `venice` from `venice-ai-sdk-provider`:
 
 ```ts
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 ```
 
 ## Example
 
 ```ts
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const { text } = await generateText({
@@ -46,7 +46,7 @@ This list is not definitive. Venice regularly adds new models to their system. Y
 Enable real-time web search with citations on all Venice text models:
 
 ```ts
-import { createVenice } from "@venice/ai-sdk-provider";
+import { createVenice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const venice = createVenice({ apiKey: "your-api-key" });
@@ -68,7 +68,7 @@ const { text } = await generateText({
 Enable advanced step-by-step reasoning with visible thinking process:
 
 ```ts
-import { createVenice } from "@venice/ai-sdk-provider";
+import { createVenice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const venice = createVenice({ apiKey: "your-api-key" });
@@ -90,7 +90,7 @@ const { text } = await generateText({
 Control the depth of reasoning for models that support it:
 
 ```ts
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const { text } = await generateText({
@@ -111,7 +111,7 @@ Options: `low` (fast, minimal thinking), `medium` (default, balanced), `high` (d
 Venice supports function calling on compatible models:
 
 ```ts
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const { text } = await generateText({
@@ -138,7 +138,7 @@ Process images with vision-compatible models. Venice supports two ways to provid
 #### Option 1: Using image URL
 
 ```ts
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 
 const { text } = await generateText({
@@ -161,7 +161,7 @@ const { text } = await generateText({
 #### Option 2: Using image data (base64)
 
 ```ts
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 import { generateText } from "ai";
 import { readFile } from "fs/promises";
 
@@ -193,7 +193,7 @@ Venice supports embedding models for semantic search and RAG pipelines:
 
 ```ts
 import { embed } from "ai";
-import { venice } from "@venice/ai-sdk-provider";
+import { venice } from "venice-ai-sdk-provider";
 
 const { embedding } = await embed({
   model: venice.textEmbeddingModel("text-embedding-model-id"),
@@ -214,7 +214,7 @@ export VENICE_API_KEY=your-api-key-here
 Or pass it directly when creating a provider instance:
 
 ```ts
-import { createVenice } from "@venice/ai-sdk-provider";
+import { createVenice } from "venice-ai-sdk-provider";
 
 const venice = createVenice({ apiKey: "your-api-key" });
 ```
