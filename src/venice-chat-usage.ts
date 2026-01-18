@@ -10,12 +10,10 @@ export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): Lang
         };
     }
 
-    const promptTokens = usage.prompt_tokens ?? 0;
-    const completionTokens = usage.completion_tokens ?? 0;
-
     return {
-        inputTokens: promptTokens,
-        outputTokens: completionTokens,
+        inputTokens: usage.prompt_tokens ?? 0,
+        outputTokens: usage.completion_tokens ?? 0,
         totalTokens: usage.total_tokens ?? undefined,
+        cachedInputTokens: usage.prompt_tokens_details?.cached_tokens ?? undefined,
     };
 }
