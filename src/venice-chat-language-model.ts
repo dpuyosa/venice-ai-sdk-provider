@@ -163,7 +163,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         if (choice?.message?.tool_calls) {
             for (const toolCall of choice.message.tool_calls) {
                 const thoughtSignature = toolCall.extra_content?.google?.thought_signature;
-                ({
+                content.push({
                     type: 'tool-call',
                     toolCallId: toolCall.id ?? generateId(),
                     toolName: toolCall.function.name,
@@ -173,15 +173,17 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
             }
         }
 
+        const usage = responseBody.usage;
         const providerMetadata: SharedV2ProviderMetadata = {
-            [this.providerOptionsName]: {},
-            ...(await this.config.metadataExtractor?.extractMetadata?.({ parsedBody: rawResponse })),
+            [this.providerOptionsName]: usage ? { usage } : {},
+            // Hack when using Anthropic models
+            ['anthropic']: usage?.prompt_tokens_details?.cache_creation_input_tokens ? { cacheCreationInputTokens: usage.prompt_tokens_details.cache_creation_input_tokens } : {},
         };
 
         return {
             content,
             finishReason: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? 'other',
-            usage: convertVeniceChatUsage(responseBody.usage),
+            usage: convertVeniceChatUsage(usage),
             providerMetadata,
             request: { body },
             response: {
@@ -482,7 +484,9 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         }
 
                         const providerMetadata: SharedV2ProviderMetadata = {
-                            [providerOptionsName]: {},
+                            [providerOptionsName]: usage ? { usage } : {},
+                            // Hack when using Anthropic models
+                            ['anthropic']: usage?.prompt_tokens_details?.cache_creation_input_tokens ? { cacheCreationInputTokens: usage.prompt_tokens_details.cache_creation_input_tokens } : {},
                             ...metadataExtractor?.buildMetadata(),
                         };
 

@@ -17,7 +17,7 @@
     "build": "tsup",
     "clean": "rm -rf dist",
     "dev": "tsup --watch",
-    "pack": "rm -rf dist && tsup && npm pack",
+    "pack": "rm -rf dist && tsup --minify && npm pack",
     "type-check": "tsc --noEmit",
     "prettier-check": "prettier --check \"./**/*.ts*\"",
     "prettier-fix": "prettier --write \"./**/*.ts*\""
@@ -33,18 +33,19 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.30",
     "@ai-sdk/provider": "^2.0.1",
-    "@ai-sdk/provider-utils": "^3.0.20",
-    "ai": "^5.0.121"
+    "@ai-sdk/provider-utils": "^3.0.20"
   },
   "devDependencies": {
     "@ai-sdk/test-server": "^0.0.2",
     "@types/node": "^25.0.9",
     "prettier": "^3.8.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "ai": "^5.0.121",
     "zod": "^4.3.5"
   },
-  "peerDependencies": {},
   "engines": {
     "node": ">=18"
   },
