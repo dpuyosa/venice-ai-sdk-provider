@@ -1,5 +1,5 @@
 interface VeniceParametersInput {
-    enableWebSearch?: "off" | "on" | "auto";
+    enableWebSearch?: 'off' | 'on' | 'auto';
     enableWebScraping?: boolean;
     enableWebCitations?: boolean;
     stripThinkingResponse?: boolean;
@@ -11,7 +11,7 @@ interface VeniceParametersInput {
 }
 
 interface VeniceParametersOutput {
-    enable_web_search?: "off" | "on" | "auto";
+    enable_web_search?: 'off' | 'on' | 'auto';
     enable_web_scraping?: boolean;
     enable_web_citations?: boolean;
     strip_thinking_response?: boolean;

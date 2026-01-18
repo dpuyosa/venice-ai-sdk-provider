@@ -1,4 +1,4 @@
-import { z } from "zod/v4";
+import { z } from 'zod/v4';
 
 const veniceTokenUsageSchema = z
     .object({
@@ -22,7 +22,7 @@ export const VeniceChatResponseSchema = z.looseObject({
     choices: z.array(
         z.object({
             message: z.object({
-                role: z.literal("assistant").nullish(),
+                role: z.literal('assistant').nullish(),
                 content: z.string().nullish(),
                 reasoning_content: z.string().nullish(),
                 reasoning: z.string().nullish(),
@@ -62,7 +62,7 @@ export const veniceChunkSchema = z.looseObject({
         z.object({
             delta: z
                 .object({
-                    role: z.enum(["assistant"]).nullish(),
+                    role: z.enum(['assistant']).nullish(),
                     content: z.string().nullish(),
                     // Most openai-compatible models set `reasoning_content`, but some
                     // providers serving `gpt-oss` set `reasoning`. See #7866

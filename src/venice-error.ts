@@ -1,6 +1,6 @@
-import type { OpenAICompatibleErrorData, ProviderErrorStructure } from "@ai-sdk/openai-compatible";
+import type { OpenAICompatibleErrorData, ProviderErrorStructure } from '@ai-sdk/openai-compatible';
 
-import { z } from "zod/v4";
+import { z } from 'zod/v4';
 
 export const veniceErrorDataSchema = z.object({
     error: z.object({

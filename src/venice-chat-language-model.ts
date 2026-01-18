@@ -1,7 +1,7 @@
-import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from "./venice-response";
-import type { VeniceLanguageModelOptions } from "./venice-chat-options";
-import type { FetchFunction, ParseResult, ResponseHandler } from "@ai-sdk/provider-utils";
-import type { MetadataExtractor, ProviderErrorStructure } from "@ai-sdk/openai-compatible";
+import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
+import type { VeniceLanguageModelOptions } from './venice-chat-options';
+import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
+import type { MetadataExtractor, ProviderErrorStructure } from '@ai-sdk/openai-compatible';
 import {
     InvalidResponseDataError,
     type APICallError,
@@ -11,17 +11,17 @@ import {
     type LanguageModelV2FinishReason,
     type LanguageModelV2StreamPart,
     type SharedV2ProviderMetadata,
-} from "@ai-sdk/provider";
+} from '@ai-sdk/provider';
 
-import { prepareTools } from "./venice-prepare-tools";
-import { convertVeniceChatUsage } from "./venice-chat-usage";
-import { defaultVeniceErrorStructure } from "./venice-error";
-import { veniceLanguageModelOptions } from "./venice-chat-options";
-import { prepareVeniceParameters } from "./venice-prepare-parameters";
-import { createVeniceChatChunkSchema as createVeniceChatChunkSchema, VeniceChatResponseSchema } from "./venice-response";
-import { convertToOpenAICompatibleChatMessages, getResponseMetadata, mapOpenAICompatibleFinishReason } from "@ai-sdk/openai-compatible/internal";
-import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from "@ai-sdk/provider-utils";
-import type { z } from "zod/v4";
+import { prepareTools } from './venice-prepare-tools';
+import { convertVeniceChatUsage } from './venice-chat-usage';
+import { defaultVeniceErrorStructure } from './venice-error';
+import { veniceLanguageModelOptions } from './venice-chat-options';
+import { prepareVeniceParameters } from './venice-prepare-parameters';
+import { createVeniceChatChunkSchema as createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
+import { convertToOpenAICompatibleChatMessages, getResponseMetadata, mapOpenAICompatibleFinishReason } from '@ai-sdk/openai-compatible/internal';
+import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
+import type { z } from 'zod/v4';
 
 export interface VeniceChatConfig {
     provider: string;
@@ -32,11 +32,11 @@ export interface VeniceChatConfig {
     errorStructure?: ProviderErrorStructure<any>;
     metadataExtractor?: MetadataExtractor;
     supportsStructuredOutputs?: boolean;
-    supportedUrls?: () => LanguageModelV2["supportedUrls"];
+    supportedUrls?: () => LanguageModelV2['supportedUrls'];
 }
 
 export class VeniceChatLanguageModel implements LanguageModelV2 {
-    readonly specificationVersion = "v2";
+    readonly specificationVersion = 'v2';
     readonly modelId: string;
     readonly config: VeniceChatConfig;
     private readonly failedResponseHandler: ResponseHandler<APICallError>;
@@ -58,17 +58,17 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
     }
 
     get provider(): string {
-        return this.config.provider ?? "venice";
+        return this.config.provider ?? 'venice';
     }
 
     private get providerOptionsName(): string {
-        return this.config.provider?.split(".")[0]?.trim() ?? "venice";
+        return this.config.provider?.split('.')[0]?.trim() ?? 'venice';
     }
 
     get supportedUrls() {
         return (
             this.config.supportedUrls?.() ?? {
-                "image/*": [/^data:image\/(?:jpeg|png|webp);base64,/, /^https?:\/\/.+\.(jpg|jpeg|png|webp)$/i],
+                'image/*': [/^data:image\/(?:jpeg|png|webp);base64,/, /^https?:\/\/.+\.(jpg|jpeg|png|webp)$/i],
             }
         );
     }
@@ -76,7 +76,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
     private async getArgs(options: LanguageModelV2CallOptions) {
         const compatibleOptions = Object.assign(
             (await parseProviderOptions({ provider: this.provider, providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {},
-            (await parseProviderOptions({ provider: "openai-compatible", providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {}
+            (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {}
         ) as VeniceLanguageModelOptions;
 
         const { tools: veniceTools, toolChoice: veniceToolChoice } = prepareTools({
@@ -96,18 +96,18 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                 presence_penalty: options.presencePenalty,
 
                 response_format:
-                    options.responseFormat?.type === "json"
+                    options.responseFormat?.type === 'json'
                         ? options.responseFormat.schema != null
                             ? {
-                                  type: "json_schema",
+                                  type: 'json_schema',
                                   json_schema: {
                                       schema: options.responseFormat.schema,
                                       strict: compatibleOptions.structuredOutputs ?? true,
-                                      name: options.responseFormat.name ?? "response",
+                                      name: options.responseFormat.name ?? 'response',
                                       description: options.responseFormat.description,
                                   },
                               }
-                            : { type: "json_object" }
+                            : { type: 'json_object' }
                         : undefined,
 
                 stop: options.stopSequences,
@@ -140,7 +140,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         };
     }
 
-    async doGenerate(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
+    async doGenerate(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2['doGenerate']>>> {
         const { args, warnings } = await this.getArgs(options);
         const body = JSON.stringify(args);
 
@@ -149,7 +149,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
             value: responseBody,
             rawValue: rawResponse,
         } = await postJsonToApi({
-            url: this.config.url({ path: "/chat/completions", modelId: this.modelId }),
+            url: this.config.url({ path: '/chat/completions', modelId: this.modelId }),
             headers: combineHeaders(this.config.headers(), options.headers),
             body,
             failedResponseHandler: this.failedResponseHandler,
@@ -162,16 +162,16 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         const content: Array<LanguageModelV2Content> = [];
 
         const text = choice?.message.content ?? null;
-        if (text != null && text.length > 0) content.push({ type: "text", text });
+        if (text != null && text.length > 0) content.push({ type: 'text', text });
 
         const reasoning = choice?.message.reasoning_content ?? choice?.message.reasoning ?? null;
-        if (reasoning != null && reasoning.length > 0) content.push({ type: "reasoning", text: reasoning });
+        if (reasoning != null && reasoning.length > 0) content.push({ type: 'reasoning', text: reasoning });
 
         if (choice?.message?.tool_calls) {
             for (const toolCall of choice.message.tool_calls) {
                 const thoughtSignature = toolCall.extra_content?.google?.thought_signature;
                 ({
-                    type: "tool-call",
+                    type: 'tool-call',
                     toolCallId: toolCall.id ?? generateId(),
                     toolName: toolCall.function.name,
                     input: toolCall.function.arguments!,
@@ -187,7 +187,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
         return {
             content,
-            finishReason: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? "other",
+            finishReason: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? 'other',
             usage: convertVeniceChatUsage(responseBody.usage),
             providerMetadata,
             request: { body },
@@ -200,7 +200,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         };
     }
 
-    async doStream(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2["doStream"]>>> {
+    async doStream(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2['doStream']>>> {
         const { args, warnings } = await this.getArgs(options);
         const body = {
             ...args,
@@ -211,7 +211,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
 
         const { responseHeaders, value: response } = await postJsonToApi({
-            url: this.config.url({ path: "/chat/completions", modelId: this.modelId }),
+            url: this.config.url({ path: '/chat/completions', modelId: this.modelId }),
             headers: combineHeaders(this.config.headers(), options.headers),
             body,
             failedResponseHandler: this.failedResponseHandler,
@@ -222,13 +222,13 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
         const toolCalls: Array<{
             id: string;
-            type: "function";
+            type: 'function';
             function: { name: string; arguments: string };
             hasFinished: boolean;
             thoughtSignature?: string;
         }> = [];
 
-        let finishReason: LanguageModelV2FinishReason = "other";
+        let finishReason: LanguageModelV2FinishReason = 'other';
 
         const providerOptionsName = this.providerOptionsName;
         let usage: VeniceTokenUsage = undefined;
@@ -240,25 +240,25 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
             stream: response.pipeThrough(
                 new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV2StreamPart>({
                     start(controller) {
-                        controller.enqueue({ type: "stream-start", warnings });
+                        controller.enqueue({ type: 'stream-start', warnings });
                     },
 
                     transform(chunk, controller) {
                         if (options.includeRawChunks) {
-                            controller.enqueue({ type: "raw", rawValue: chunk.rawValue });
+                            controller.enqueue({ type: 'raw', rawValue: chunk.rawValue });
                         }
 
                         if (!chunk.success) {
-                            finishReason = "error";
-                            controller.enqueue({ type: "error", error: chunk.error });
+                            finishReason = 'error';
+                            controller.enqueue({ type: 'error', error: chunk.error });
                             return;
                         }
 
                         metadataExtractor?.processChunk(chunk.rawValue);
 
-                        if ("error" in chunk.value) {
-                            finishReason = "error";
-                            controller.enqueue({ type: "error", error: chunk.value.error.message });
+                        if ('error' in chunk.value) {
+                            finishReason = 'error';
+                            controller.enqueue({ type: 'error', error: chunk.value.error.message });
                             return;
                         }
 
@@ -270,7 +270,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                             isFirstChunk = false;
 
                             controller.enqueue({
-                                type: "response-metadata",
+                                type: 'response-metadata',
                                 ...getResponseMetadata(value),
                             });
                         }
@@ -282,7 +282,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         const choice = value.choices[0];
 
                         if (choice?.finish_reason != null) {
-                            finishReason = mapOpenAICompatibleFinishReason(choice.finish_reason) ?? "other";
+                            finishReason = mapOpenAICompatibleFinishReason(choice.finish_reason) ?? 'other';
                         }
 
                         if (choice?.delta == null) {
@@ -295,15 +295,15 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         if (reasoningContent) {
                             if (!isActiveReasoning) {
                                 controller.enqueue({
-                                    type: "reasoning-start",
-                                    id: "reasoning-0",
+                                    type: 'reasoning-start',
+                                    id: 'reasoning-0',
                                 });
                                 isActiveReasoning = true;
                             }
 
                             controller.enqueue({
-                                type: "reasoning-delta",
-                                id: "reasoning-0",
+                                type: 'reasoning-delta',
+                                id: 'reasoning-0',
                                 delta: reasoningContent,
                             });
                         }
@@ -312,20 +312,20 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                             // end active reasoning block before text starts
                             if (isActiveReasoning) {
                                 controller.enqueue({
-                                    type: "reasoning-end",
-                                    id: "reasoning-0",
+                                    type: 'reasoning-end',
+                                    id: 'reasoning-0',
                                 });
                                 isActiveReasoning = false;
                             }
 
                             if (!isActiveText) {
-                                controller.enqueue({ type: "text-start", id: "txt-0" });
+                                controller.enqueue({ type: 'text-start', id: 'txt-0' });
                                 isActiveText = true;
                             }
 
                             controller.enqueue({
-                                type: "text-delta",
-                                id: "txt-0",
+                                type: 'text-delta',
+                                id: 'txt-0',
                                 delta: delta.content,
                             });
                         }
@@ -334,8 +334,8 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                             // end active reasoning block before tool calls start
                             if (isActiveReasoning) {
                                 controller.enqueue({
-                                    type: "reasoning-end",
-                                    id: "reasoning-0",
+                                    type: 'reasoning-end',
+                                    id: 'reasoning-0',
                                 });
                                 isActiveReasoning = false;
                             }
@@ -359,17 +359,17 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                                     }
 
                                     controller.enqueue({
-                                        type: "tool-input-start",
+                                        type: 'tool-input-start',
                                         id: toolCallDelta.id,
                                         toolName: toolCallDelta.function.name,
                                     });
 
                                     toolCalls[index] = {
                                         id: toolCallDelta.id,
-                                        type: "function",
+                                        type: 'function',
                                         function: {
                                             name: toolCallDelta.function.name,
-                                            arguments: toolCallDelta.function.arguments ?? "",
+                                            arguments: toolCallDelta.function.arguments ?? '',
                                         },
                                         hasFinished: false,
                                         thoughtSignature: toolCallDelta.extra_content?.google?.thought_signature ?? undefined,
@@ -381,7 +381,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                                         // send delta if the argument text has already started:
                                         if (toolCall.function.arguments.length > 0) {
                                             controller.enqueue({
-                                                type: "tool-input-delta",
+                                                type: 'tool-input-delta',
                                                 id: toolCall.id,
                                                 delta: toolCall.function.arguments,
                                             });
@@ -391,12 +391,12 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                                         // (some providers send the full tool call in one chunk):
                                         if (isParsableJson(toolCall.function.arguments)) {
                                             controller.enqueue({
-                                                type: "tool-input-end",
+                                                type: 'tool-input-end',
                                                 id: toolCall.id,
                                             });
 
                                             controller.enqueue({
-                                                type: "tool-call",
+                                                type: 'tool-call',
                                                 toolCallId: toolCall.id ?? generateId(),
                                                 toolName: toolCall.function.name,
                                                 input: toolCall.function.arguments,
@@ -422,24 +422,24 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
                                 if (toolCall.hasFinished) continue;
 
-                                if (toolCallDelta.function?.arguments != null) toolCall.function!.arguments += toolCallDelta.function?.arguments ?? "";
+                                if (toolCallDelta.function?.arguments != null) toolCall.function!.arguments += toolCallDelta.function?.arguments ?? '';
 
                                 // send delta
                                 controller.enqueue({
-                                    type: "tool-input-delta",
+                                    type: 'tool-input-delta',
                                     id: toolCall.id,
-                                    delta: toolCallDelta.function.arguments ?? "",
+                                    delta: toolCallDelta.function.arguments ?? '',
                                 });
 
                                 // check if tool call is complete
                                 if (toolCall.function?.name != null && toolCall.function?.arguments != null && isParsableJson(toolCall.function.arguments)) {
                                     controller.enqueue({
-                                        type: "tool-input-end",
+                                        type: 'tool-input-end',
                                         id: toolCall.id,
                                     });
 
                                     controller.enqueue({
-                                        type: "tool-call",
+                                        type: 'tool-call',
                                         toolCallId: toolCall.id ?? generateId(),
                                         toolName: toolCall.function.name,
                                         input: toolCall.function.arguments,
@@ -460,19 +460,19 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                     },
 
                     flush(controller) {
-                        if (isActiveReasoning) controller.enqueue({ type: "reasoning-end", id: "reasoning-0" });
+                        if (isActiveReasoning) controller.enqueue({ type: 'reasoning-end', id: 'reasoning-0' });
 
-                        if (isActiveText) controller.enqueue({ type: "text-end", id: "txt-0" });
+                        if (isActiveText) controller.enqueue({ type: 'text-end', id: 'txt-0' });
 
                         // go through all tool calls and send the ones that are not finished
                         for (const toolCall of toolCalls.filter((toolCall) => !toolCall.hasFinished)) {
                             controller.enqueue({
-                                type: "tool-input-end",
+                                type: 'tool-input-end',
                                 id: toolCall.id,
                             });
 
                             controller.enqueue({
-                                type: "tool-call",
+                                type: 'tool-call',
                                 toolCallId: toolCall.id ?? generateId(),
                                 toolName: toolCall.function.name,
                                 input: toolCall.function.arguments,
@@ -494,7 +494,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         };
 
                         controller.enqueue({
-                            type: "finish",
+                            type: 'finish',
                             finishReason,
                             usage: convertVeniceChatUsage(usage),
                             providerMetadata,

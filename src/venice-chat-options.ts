@@ -1,11 +1,11 @@
-import { z } from "zod/v4";
+import { z } from 'zod/v4';
 
 export type VeniceChatModelId = string;
 
 export const veniceLanguageModelOptions = z.object({
     veniceParameters: z
         .object({
-            enableWebSearch: z.enum(["off", "on", "auto"]).default("off"),
+            enableWebSearch: z.enum(['off', 'on', 'auto']).default('off'),
             enableWebScraping: z.boolean(),
             enableWebCitations: z.boolean(),
             stripThinkingResponse: z.boolean(),
@@ -31,11 +31,11 @@ export const veniceLanguageModelOptions = z.object({
 
     reasoning: z
         .object({
-            effort: z.enum(["low", "medium", "high"]),
+            effort: z.enum(['low', 'medium', 'high']),
         })
         .optional(),
 
-    reasoningEffort: z.enum(["low", "medium", "high"]).optional(),
+    reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
 
     stopTokenIds: z.array(z.number()),
 
