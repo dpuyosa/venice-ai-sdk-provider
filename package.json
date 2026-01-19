@@ -1,73 +1,75 @@
 {
-    "name": "venice-ai-sdk-provider",
-    "version": "1.1.5",
-    "description": "Venice AI provider for the Vercel AI SDK",
-    "license": "Apache-2.0",
-    "sideEffects": false,
-    "main": "./dist/index.js",
-    "module": "./dist/index.mjs",
-    "types": "./dist/index.d.ts",
-    "files": [
-        "dist/**/*",
-        "README.md",
-        "LICENSE"
-    ],
-    "scripts": {
-        "build": "tsup --tsconfig tsconfig.build.json",
-        "clean": "rm -rf dist",
-        "dev": "tsup --watch",
-        "pack": "rm -rf dist && tsup --minify --tsconfig tsconfig.build.json && npm pack",
-        "type-check": "tsc --noEmit",
-        "prettier-check": "prettier --check \"./**/*.ts*\"",
-        "prettier-fix": "prettier --write \"./**/*.ts*\"",
-        "test": "vitest"
-    },
-    "exports": {
-        "./package.json": "./package.json",
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.mjs",
-            "require": "./dist/index.js"
-        }
-    },
-    "dependencies": {
-        "@ai-sdk/openai-compatible": "^1.0.30",
-        "@ai-sdk/provider": "^2.0.1",
-        "@ai-sdk/provider-utils": "^3.0.20",
-        "ai": "^5.0.121"
-    },
-    "devDependencies": {
-        "@types/node": "^25.0.9",
-        "prettier": "^3.8.0",
-        "tsup": "^8.5.1",
-        "typescript": "^5.9.3",
-        "zod": "^4.3.5"
-    },
-    "peerDependencies": {
-        "ai": "^5.0.121"
-    },
-    "engines": {
-        "node": ">=18"
-    },
-    "publishConfig": {
-        "access": "public"
-    },
-    "homepage": "https://github.com/dpuyosa/venice-ai-sdk-provider",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/dpuyosa/venice-ai-sdk-provider.git"
-    },
-    "bugs": {
-        "url": "https://github.com/dpuyosa/venice-ai-sdk-provider/issues"
-    },
-    "keywords": [
-        "ai",
-        "venice",
-        "venice-ai",
-        "vercel",
-        "vercel-ai-sdk",
-        "openai-compatible",
-        "agent",
-        "private"
-    ]
+  "name": "venice-ai-sdk-provider",
+  "version": "1.1.5",
+  "description": "Venice AI provider for the Vercel AI SDK",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup --tsconfig tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "dev": "tsup --watch",
+    "pack": "rm -rf dist && mkdir -p pack && tsup --minify --tsconfig tsconfig.build.json && npm pack --pack-destination=pack",
+    "type-check": "tsc --noEmit",
+    "prettier-check": "prettier --check \"./**/*.ts*\"",
+    "prettier-fix": "prettier --write \"./**/*.ts*\"",
+    "test": "vitest",
+    "prepare": "husky"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^1.0.30",
+    "@ai-sdk/provider": "^2.0.1",
+    "@ai-sdk/provider-utils": "^3.0.20",
+    "ai": "^5.0.121"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "husky": "^9.1.7",
+    "prettier": "^3.8.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.5"
+  },
+  "peerDependencies": {
+    "ai": "^5.0.121"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/dpuyosa/venice-ai-sdk-provider",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dpuyosa/venice-ai-sdk-provider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dpuyosa/venice-ai-sdk-provider/issues"
+  },
+  "keywords": [
+    "ai",
+    "venice",
+    "venice-ai",
+    "vercel",
+    "vercel-ai-sdk",
+    "openai-compatible",
+    "agent",
+    "private"
+  ]
 }
