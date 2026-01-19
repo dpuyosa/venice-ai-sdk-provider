@@ -92,14 +92,14 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                     options.responseFormat?.type === 'json'
                         ? options.responseFormat.schema != null
                             ? {
-                                type: 'json_schema',
-                                json_schema: {
-                                    schema: options.responseFormat.schema,
-                                    strict: compatibleOptions.structuredOutputs ?? true,
-                                    name: options.responseFormat.name ?? 'response',
-                                    description: options.responseFormat.description,
-                                },
-                            }
+                                  type: 'json_schema',
+                                  json_schema: {
+                                      schema: options.responseFormat.schema,
+                                      strict: compatibleOptions.structuredOutputs ?? true,
+                                      name: options.responseFormat.name ?? 'response',
+                                      description: options.responseFormat.description,
+                                  },
+                              }
                             : { type: 'json_object' }
                         : undefined,
 
@@ -135,7 +135,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
     async doGenerate(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2['doGenerate']>>> {
         const { args, warnings } = await this.getArgs(options);
-        const body = JSON.stringify({ ...args, stream: false });
+        const body = { ...args, stream: false };
 
         const {
             responseHeaders,
@@ -397,12 +397,12 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                                                 input: toolCall.function.arguments,
                                                 ...(toolCall.thoughtSignature
                                                     ? {
-                                                        providerMetadata: {
-                                                            [providerOptionsName]: {
-                                                                thoughtSignature: toolCall.thoughtSignature,
-                                                            },
-                                                        },
-                                                    }
+                                                          providerMetadata: {
+                                                              [providerOptionsName]: {
+                                                                  thoughtSignature: toolCall.thoughtSignature,
+                                                              },
+                                                          },
+                                                      }
                                                     : {}),
                                             });
                                             toolCall.hasFinished = true;
@@ -440,12 +440,12 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                                         input: toolCall.function.arguments,
                                         ...(toolCall.thoughtSignature
                                             ? {
-                                                providerMetadata: {
-                                                    [providerOptionsName]: {
-                                                        thoughtSignature: toolCall.thoughtSignature,
-                                                    },
-                                                },
-                                            }
+                                                  providerMetadata: {
+                                                      [providerOptionsName]: {
+                                                          thoughtSignature: toolCall.thoughtSignature,
+                                                      },
+                                                  },
+                                              }
                                             : {}),
                                     });
                                     toolCall.hasFinished = true;
@@ -473,12 +473,12 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                                 input: toolCall.function.arguments,
                                 ...(toolCall.thoughtSignature
                                     ? {
-                                        providerMetadata: {
-                                            [providerOptionsName]: {
-                                                thoughtSignature: toolCall.thoughtSignature,
-                                            },
-                                        },
-                                    }
+                                          providerMetadata: {
+                                              [providerOptionsName]: {
+                                                  thoughtSignature: toolCall.thoughtSignature,
+                                              },
+                                          },
+                                      }
                                     : {}),
                             });
                         }
