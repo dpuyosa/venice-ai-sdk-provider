@@ -19,7 +19,8 @@
         "pack": "rm -rf dist && tsup --minify --tsconfig tsconfig.build.json && npm pack",
         "type-check": "tsc --noEmit",
         "prettier-check": "prettier --check \"./**/*.ts*\"",
-        "prettier-fix": "prettier --write \"./**/*.ts*\""
+        "prettier-fix": "prettier --write \"./**/*.ts*\"",
+        "test": "vitest"
     },
     "exports": {
         "./package.json": "./package.json",

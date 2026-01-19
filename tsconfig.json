@@ -21,16 +21,7 @@
         "jsx": "preserve",
         "rootDir": "src",
         "outDir": "dist",
-        "verbatimModuleSyntax": true,
+        "verbatimModuleSyntax": true
     },
-    "include": [
-        "src",
-        "*.config.ts"
-    ],
-    "exclude": [
-        "dist",
-        "build",
-        "node_modules",
-        "tsup.config.ts"
-    ]
+    "include": ["src"]
 }
