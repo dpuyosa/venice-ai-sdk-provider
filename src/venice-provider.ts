@@ -112,3 +112,5 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
 
     return provider as VeniceProvider;
 }
+
+export const venice = createVenice();

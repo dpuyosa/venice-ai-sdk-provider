@@ -1,1 +1,1 @@
-export { createVenice } from './venice-provider';
+export { createVenice, venice } from './venice-provider';
