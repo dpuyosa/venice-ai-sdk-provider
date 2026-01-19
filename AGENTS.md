@@ -5,7 +5,7 @@ Follow them for all agentic edits and reviews.
 
 ## Quick Facts
 
-- Package: `@venice/ai-sdk-provider` (TypeScript).
+- Package: `venice-ai-sdk-provider` (TypeScript).
 - Build tool: `tsup` (CJS + ESM + d.ts).
 - Formatting: `prettier` (see `.prettierrc`).
 - Type checking: `tsc` strict mode.

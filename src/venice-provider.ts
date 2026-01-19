@@ -100,7 +100,6 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
     const createEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getCommonModelConfig('embedding'));
 
     const provider = (modelId: string) => createLanguageModel(modelId);
-    provider.specificationVersion = 'v2' as const;
     provider.chatModel = createChatModel;
 
     provider.languageModel = createLanguageModel;
