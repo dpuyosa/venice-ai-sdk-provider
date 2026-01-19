@@ -58,7 +58,7 @@ export interface VeniceProvider extends ProviderV2 {
 }
 
 export function createVenice(options: VeniceProviderSettings = {}): VeniceProvider {
-    const baseURL = withoutTrailingSlash(options.baseURL ?? 'https://api.venice.ai/v1');
+    const baseURL = withoutTrailingSlash(options.baseURL ?? 'https://api.venice.ai/api/v1');
     const providerName = options.name ?? 'venice';
 
     const getHeaders = () =>
@@ -112,5 +112,3 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
 
     return provider as VeniceProvider;
 }
-
-export const venice = createVenice();

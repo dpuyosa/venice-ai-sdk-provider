@@ -1,6 +1,6 @@
 {
     "name": "venice-ai-sdk-provider",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "description": "Venice AI provider for the Vercel AI SDK",
     "license": "Apache-2.0",
     "sideEffects": false,
@@ -13,10 +13,10 @@
         "LICENSE"
     ],
     "scripts": {
-        "build": "tsup",
+        "build": "tsup --tsconfig tsconfig.build.json",
         "clean": "rm -rf dist",
         "dev": "tsup --watch",
-        "pack": "rm -rf dist && tsup --minify && npm pack",
+        "pack": "rm -rf dist && tsup --minify --tsconfig tsconfig.build.json && npm pack",
         "type-check": "tsc --noEmit",
         "prettier-check": "prettier --check \"./**/*.ts*\"",
         "prettier-fix": "prettier --write \"./**/*.ts*\""
