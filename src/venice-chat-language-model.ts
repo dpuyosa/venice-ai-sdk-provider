@@ -174,11 +174,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         }
 
         const usage = responseBody.usage;
-        const providerMetadata: SharedV2ProviderMetadata = {
-            [this.providerOptionsName]: usage ? { usage } : {},
-            // Hack when using Anthropic models
-            ['anthropic']: usage?.prompt_tokens_details?.cache_creation_input_tokens ? { cacheCreationInputTokens: usage.prompt_tokens_details.cache_creation_input_tokens } : {},
-        };
+        const providerMetadata: SharedV2ProviderMetadata = { [this.providerOptionsName]: usage ? { usage } : {} };
 
         return {
             content,
@@ -485,8 +481,6 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
                         const providerMetadata: SharedV2ProviderMetadata = {
                             [providerOptionsName]: usage ? { usage } : {},
-                            // Hack when using Anthropic models
-                            ['anthropic']: usage?.prompt_tokens_details?.cache_creation_input_tokens ? { cacheCreationInputTokens: usage.prompt_tokens_details.cache_creation_input_tokens } : {},
                             ...metadataExtractor?.buildMetadata(),
                         };
 
