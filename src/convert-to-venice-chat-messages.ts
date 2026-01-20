@@ -1,8 +1,8 @@
+import type { VeniceChatPrompt } from './venice-chat-message';
 import type { LanguageModelV2Prompt, SharedV2ProviderMetadata } from '@ai-sdk/provider';
 
-import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
-import type { VeniceChatPrompt } from './venice-chat-message';
 import { convertToBase64 } from '@ai-sdk/provider-utils';
+import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata }) {
     return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
@@ -78,10 +78,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
                 for (const part of content) {
-                    assistantMetadata = {
-                        ...assistantMetadata,
-                        ...getVeniceMetadata(part),
-                    };
+                    Object.assign(assistantMetadata, getVeniceMetadata(part));
                     switch (part.type) {
                         case 'text': {
                             assistantText += part.text;
@@ -102,10 +99,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     }
                 }
 
-                assistantText = assistantText === '' && Object.keys(assistantMetadata).length > 0 ? '...' : assistantText;
+                const hasMetadata = Object.keys(assistantMetadata).length > 0;
+                assistantText = assistantText === '' && hasMetadata ? '...' : assistantText;
                 messages.push({
                     role: 'assistant',
-                    content: Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
+                    content: hasMetadata ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
                     ...getVeniceMetadata({ providerOptions }),
                 });

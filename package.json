@@ -39,8 +39,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.30",
     "@ai-sdk/provider": "^2.0.1",
-    "@ai-sdk/provider-utils": "^3.0.20",
-    "ai": "^5.0.121"
+    "@ai-sdk/provider-utils": "^3.0.20"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
