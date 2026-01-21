@@ -64,10 +64,13 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
 
             case 'assistant': {
                 if (content.length === 1 && content[0]?.type === 'text') {
+                    const assistantText = content[0].text;
+                    if (!assistantText.length) break;
+
                     const partMetadata = getVeniceMetadata(content[0]);
                     messages.push({
                         role: 'assistant',
-                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...partMetadata }] : assistantText,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                     break;
@@ -98,6 +101,8 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                         // case 'reasoning': { }
                     }
                 }
+
+                if (!(assistantText.length || toolCalls.length)) break;
 
                 const hasMetadata = Object.keys(assistantMetadata).length > 0;
                 assistantText = assistantText === '' && hasMetadata ? '...' : assistantText;
