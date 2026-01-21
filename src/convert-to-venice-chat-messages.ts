@@ -8,7 +8,7 @@ function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata
     return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
 }
 
-export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): VeniceChatPrompt {
+export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, forceContentArray: boolean): VeniceChatPrompt {
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
         switch (role) {
@@ -16,7 +16,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                 const partMetadata = getVeniceMetadata({ providerOptions });
                 messages.push({
                     role: 'system',
-                    content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content, ...partMetadata }] : content,
+                    content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content, ...partMetadata }] : content,
                 });
                 break;
             }
@@ -26,7 +26,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     const partMetadata = getVeniceMetadata(content[0]);
                     messages.push({
                         role: 'user',
-                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
+                        content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                     break;
@@ -70,7 +70,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     const partMetadata = getVeniceMetadata(content[0]);
                     messages.push({
                         role: 'assistant',
-                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...partMetadata }] : assistantText,
+                        content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...partMetadata }] : assistantText,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                     break;
@@ -104,12 +104,10 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
 
                 if (!(assistantText.length || toolCalls.length)) break;
 
-                const hasMetadata = Object.keys(assistantMetadata).length > 0;
-                assistantText = assistantText === '' && hasMetadata ? '...' : assistantText;
                 messages.push({
                     role: 'assistant',
-                    content: hasMetadata ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+                    content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText === '' ? '...' : assistantText, ...assistantMetadata }] : assistantText,
                     ...getVeniceMetadata({ providerOptions }),
                 });
 
@@ -137,7 +135,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt): Veni
                     messages.push({
                         role: 'tool',
                         tool_call_id: toolResponse.toolCallId,
-                        content: Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: contentValue, ...partMetadata }] : contentValue,
+                        content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: contentValue, ...partMetadata }] : contentValue,
                         ...getVeniceMetadata({ providerOptions }),
                     });
                 }

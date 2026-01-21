@@ -110,7 +110,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                 reasoning: undefined,
                 reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
 
-                messages: convertToVeniceChatMessages(options.prompt),
+                messages: convertToVeniceChatMessages(options.prompt, this.modelId.toLowerCase().includes('claude')),
 
                 tools: veniceTools,
                 tool_choice: veniceToolChoice,
