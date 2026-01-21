@@ -107,7 +107,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                 messages.push({
                     role: 'assistant',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-                    content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText === '' ? '...' : assistantText, ...assistantMetadata }] : assistantText,
+                    content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText === '' ? '\n' : assistantText, ...assistantMetadata }] : assistantText,
                     ...getVeniceMetadata({ providerOptions }),
                 });
 
