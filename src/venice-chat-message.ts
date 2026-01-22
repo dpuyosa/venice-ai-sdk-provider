@@ -22,14 +22,15 @@ export interface VeniceUserMessage extends JsonRecord<VeniceContentPartText | Ve
 }
 export interface VeniceAssistantMessage extends JsonRecord<VeniceContentPartText | VeniceMessageToolCall> {
     role: 'assistant';
-    content: string | Array<VeniceContentPartText>;
     tool_calls?: Array<VeniceMessageToolCall>;
+    reasoning_content?: string;
+    content: string | Array<VeniceContentPartText>;
 }
 
 export interface VeniceToolMessage extends JsonRecord<VeniceContentPartText> {
     role: 'tool';
-    content: string | Array<VeniceContentPartText>;
     tool_call_id: string;
+    content: string | Array<VeniceContentPartText>;
 }
 
 export type VeniceMessageToolCall = {
