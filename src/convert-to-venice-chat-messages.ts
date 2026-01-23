@@ -64,7 +64,6 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
 
             case 'assistant': {
                 let assistantText = '';
-                let reasoningText = '';
                 let assistantMetadata = {};
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
@@ -86,10 +85,6 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                             });
                             break;
                         }
-                        case 'reasoning': {
-                            reasoningText += part.text;
-                            break;
-                        }
                     }
                 }
 
@@ -98,7 +93,6 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                 messages.push({
                     role: 'assistant',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-                    reasoning_content: reasoningText.length ? reasoningText : undefined,
                     content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText === '' ? '\n' : assistantText, ...assistantMetadata }] : assistantText,
                     ...getVeniceMetadata({ providerOptions }),
                 });
