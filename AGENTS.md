@@ -37,7 +37,7 @@ Use `bun` unless the user asks otherwise.
 When tests are added:
 
 - `bun run test` (run all tests).
-- `bun run test:watch` (watch mode).
+- `bun run test -- --watch` (watch mode).
 - By file: `bun run test -- path/to/file.test.ts`.
 - By test name: `bun run test -- -t "test name"`.
 
@@ -58,7 +58,7 @@ Prefer small, focused changes that preserve behavior.
 
 - 4 spaces indentation (tabWidth: 4).
 - Semicolons required.
-- Double quotes for strings.
+- Single quotes for strings.
 - Trailing commas where valid (es5).
 - Bracket spacing enabled.
 - Max line width 230.
