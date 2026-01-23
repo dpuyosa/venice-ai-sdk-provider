@@ -81,13 +81,35 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
             args: {
                 model: this.modelId,
 
+                n: compatibleOptions.n,
+                user: compatibleOptions.user,
                 max_completion_tokens: compatibleOptions.maxCompletionTokens ?? options.maxOutputTokens,
+                stream: compatibleOptions.stream,
+                stream_options: compatibleOptions.streamOptions,
+
+                stop: options.stopSequences,
+                stop_token_ids: compatibleOptions.stopTokenIds,
+                seed: options.seed,
+
                 temperature: options.temperature,
+                max_temp: compatibleOptions.maxTemp,
+                min_temp: compatibleOptions.minTemp,
                 top_p: options.topP,
+                min_p: compatibleOptions.minP,
                 top_k: options.topK,
+
                 frequency_penalty: options.frequencyPenalty,
                 presence_penalty: options.presencePenalty,
+                repetition_penalty: compatibleOptions.repetitionPenalty,
 
+                logprobs: compatibleOptions.logprobs,
+                top_logprobs: compatibleOptions.topLogprobs,
+
+                reasoning: undefined,
+                reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
+                prompt_cache_key: compatibleOptions.promptCacheKey,
+
+                venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
                 response_format:
                     options.responseFormat?.type === 'json'
                         ? options.responseFormat.schema != null
@@ -103,31 +125,10 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                             : { type: 'json_object' }
                         : undefined,
 
-                stop: options.stopSequences,
-                stop_token_ids: compatibleOptions.stopTokenIds,
-                seed: options.seed,
-
-                reasoning: undefined,
-                reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
+                tool_choice: veniceToolChoice,
+                tools: veniceTools,
 
                 messages: convertToVeniceChatMessages(options.prompt, this.modelId.toLowerCase().includes('claude')),
-
-                tools: veniceTools,
-                tool_choice: veniceToolChoice,
-
-                venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
-
-                logprobs: compatibleOptions.logprobs,
-                top_logprobs: compatibleOptions.topLogprobs,
-                max_temp: compatibleOptions.maxTemp,
-                min_temp: compatibleOptions.minTemp,
-                min_p: compatibleOptions.minP,
-                n: compatibleOptions.n,
-                user: compatibleOptions.user,
-                stream: compatibleOptions.stream,
-                stream_options: compatibleOptions.streamOptions,
-                repetition_penalty: compatibleOptions.repetitionPenalty,
-                prompt_cache_key: compatibleOptions.promptCacheKey,
             },
             warnings: [],
         };
