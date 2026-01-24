@@ -1,4 +1,4 @@
-import type { VeniceChatPrompt } from './venice-chat-message';
+import type { VeniceChatPrompt, VeniceUserMessageContentPart } from './venice-chat-message';
 import type { LanguageModelV2Prompt, SharedV2ProviderMetadata } from '@ai-sdk/provider';
 
 import { convertToBase64 } from '@ai-sdk/provider-utils';
@@ -42,10 +42,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                             }
                             case 'file': {
                                 if (part.mediaType.startsWith('image/')) {
+                                    const mediaType = part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
                                     return {
                                         type: 'image_url',
                                         image_url: {
-                                            url: part.data instanceof URL ? part.data.toString() : `data:${part.mediaType};base64,${convertToBase64(part.data)}`,
+                                            url: part.data instanceof URL ? part.data.toString() : `data:${mediaType};base64,${convertToBase64(part.data)}`,
                                         },
                                         ...partMetadata,
                                     };
@@ -105,6 +106,42 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                     const partMetadata = getVeniceMetadata(toolResponse);
                     const output = toolResponse.output;
 
+                    // Check if output contains images (only possible with 'content' type)
+                    if (output.type === 'content') {
+                        const hasImage = output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('image/'));
+                        if (hasImage) {
+                            const userContent: Array<VeniceUserMessageContentPart> = [];
+                            userContent.push({
+                                type: 'text',
+                                text: `[Tool Result: ${toolResponse.toolCallId}]`,
+                            });
+
+                            for (const part of output.value) {
+                                if (part.type === 'text') {
+                                    userContent.push({ type: 'text', text: part.text });
+                                } else if (part.type === 'media' && part.mediaType.startsWith('image/')) {
+                                    const mediaType = part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
+                                    userContent.push({
+                                        type: 'image_url',
+                                        image_url: {
+                                            url: `data:${mediaType};base64,${part.data}`,
+                                        },
+                                    });
+                                }
+                            }
+
+                            if (userContent.length) Object.assign(userContent.at(-1)!, partMetadata);
+
+                            messages.push({
+                                role: 'user',
+                                content: userContent,
+                                ...getVeniceMetadata({ providerOptions }),
+                            });
+                            continue;
+                        }
+                    }
+
+                    // Default behavior: create tool message
                     let contentValue: string;
                     switch (output.type) {
                         case 'text':

@@ -16,7 +16,7 @@ export interface VeniceSystemMessage extends JsonRecord<VeniceContentPartText> {
     content: string | Array<VeniceContentPartText>;
 }
 
-export interface VeniceUserMessage extends JsonRecord<VeniceContentPartText | VeniceContentPartImage> {
+export interface VeniceUserMessage extends JsonRecord<VeniceUserMessageContentPart> {
     role: 'user';
     content: string | Array<VeniceUserMessageContentPart>;
 }
