@@ -128,7 +128,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                 tool_choice: veniceToolChoice,
                 tools: veniceTools,
 
-                messages: convertToVeniceChatMessages(options.prompt, this.modelId.toLowerCase().includes('claude')),
+                messages: convertToVeniceChatMessages(options.prompt, this.modelId),
             },
             warnings: [],
         };

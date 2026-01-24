@@ -1,5 +1,5 @@
-import type { VeniceChatPrompt, VeniceUserMessageContentPart } from './venice-chat-message';
-import type { LanguageModelV2Prompt, SharedV2ProviderMetadata } from '@ai-sdk/provider';
+import type { VeniceChatPrompt, VeniceUserMessageContentPart, VeniceContentPartImage, VeniceContentPartVideo, VeniceContentPartAudio } from './venice-chat-message';
+import type { LanguageModelV2Prompt, SharedV2ProviderMetadata, LanguageModelV2DataContent } from '@ai-sdk/provider';
 
 import { convertToBase64 } from '@ai-sdk/provider-utils';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
@@ -23,7 +23,63 @@ function extractAudioFormat(mimeType: string): 'wav' | 'mp3' | 'aiff' | 'aac' | 
     return formatMap[mimeType.toLowerCase()] ?? 'wav';
 }
 
-export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, forceContentArray: boolean): VeniceChatPrompt {
+function isClaudeModel(modelId: string): boolean {
+    return modelId.toLowerCase().includes('claude');
+}
+
+function isGeminiModel(modelId: string): boolean {
+    return modelId.toLowerCase().includes('gemini');
+}
+
+function createImageContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartImage & object {
+    const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
+    return {
+        type: 'image_url',
+        image_url: {
+            url: data instanceof URL ? data.toString() : `data:${finalMediaType};base64,${convertToBase64(data)}`,
+        },
+        ...partMetadata,
+    };
+}
+
+function createVideoContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartVideo & object {
+    const mimeType = mediaType === 'video/*' ? 'video/mp4' : mediaType.toLowerCase();
+    const isValidVideo = ['video/mp4', 'video/mpeg', 'video/mov', 'video/webm'].includes(mimeType);
+
+    if (!isValidVideo) {
+        throw new UnsupportedFunctionalityError({
+            functionality: `Unsupported video format: ${mediaType}`,
+        });
+    }
+
+    return {
+        type: 'video_url',
+        video_url: {
+            url: data instanceof URL ? data.toString() : `data:${mimeType};base64,${convertToBase64(data)}`,
+        },
+        ...partMetadata,
+    };
+}
+
+function createAudioContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartAudio & object {
+    if (data instanceof URL) {
+        throw new UnsupportedFunctionalityError({
+            functionality: 'Audio URLs are not supported. Use base64-encoded audio data.',
+        });
+    }
+    return {
+        type: 'input_audio',
+        input_audio: {
+            data: convertToBase64(data),
+            format: extractAudioFormat(mediaType),
+        },
+        ...partMetadata,
+    };
+}
+
+export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, modelId: string): VeniceChatPrompt {
+    const forceContentArray = isClaudeModel(modelId);
+    const supportsVideoAndAudio = isGeminiModel(modelId);
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
         switch (role) {
@@ -57,45 +113,21 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                             }
                             case 'file': {
                                 if (part.mediaType.startsWith('image/')) {
-                                    const mediaType = part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
-                                    return {
-                                        type: 'image_url',
-                                        image_url: {
-                                            url: part.data instanceof URL ? part.data.toString() : `data:${mediaType};base64,${convertToBase64(part.data)}`,
-                                        },
-                                        ...partMetadata,
-                                    };
+                                    return createImageContentPart(part.mediaType, part.data, partMetadata);
                                 } else if (part.mediaType.startsWith('audio/')) {
-                                    if (part.data instanceof URL) {
+                                    if (!supportsVideoAndAudio) {
                                         throw new UnsupportedFunctionalityError({
-                                            functionality: 'Audio URLs are not supported. Use base64-encoded audio data.',
+                                            functionality: 'Audio content is only supported for Gemini models.',
                                         });
                                     }
-                                    return {
-                                        type: 'input_audio',
-                                        input_audio: {
-                                            data: convertToBase64(part.data),
-                                            format: extractAudioFormat(part.mediaType),
-                                        },
-                                        ...partMetadata,
-                                    };
+                                    return createAudioContentPart(part.mediaType, part.data, partMetadata);
                                 } else if (part.mediaType.startsWith('video/')) {
-                                    const mimeType = part.mediaType === 'video/*' ? 'video/mp4' : part.mediaType.toLowerCase();
-                                    const isValidVideo = ['video/mp4', 'video/mpeg', 'video/mov', 'video/webm'].includes(mimeType);
-
-                                    if (!isValidVideo) {
+                                    if (!supportsVideoAndAudio) {
                                         throw new UnsupportedFunctionalityError({
-                                            functionality: `Unsupported video format: ${part.mediaType}`,
+                                            functionality: 'Video content is only supported for Gemini models.',
                                         });
                                     }
-
-                                    return {
-                                        type: 'video_url',
-                                        video_url: {
-                                            url: part.data instanceof URL ? part.data.toString() : `data:${mimeType};base64,${convertToBase64(part.data)}`,
-                                        },
-                                        ...partMetadata,
-                                    };
+                                    return createVideoContentPart(part.mediaType, part.data, partMetadata);
                                 } else {
                                     throw new UnsupportedFunctionalityError({
                                         functionality: `file part media type ${part.mediaType}`,
@@ -152,10 +184,13 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                     const partMetadata = getVeniceMetadata(toolResponse);
                     const output = toolResponse.output;
 
-                    // Check if output contains images (only possible with 'content' type)
+                    // Check if output contains media (only possible with 'content' type)
                     if (output.type === 'content') {
                         const hasImage = output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('image/'));
-                        if (hasImage) {
+                        const hasVideo = supportsVideoAndAudio && output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('video/'));
+                        const hasAudio = supportsVideoAndAudio && output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('audio/'));
+
+                        if (hasImage || hasVideo || hasAudio) {
                             const userContent: Array<VeniceUserMessageContentPart> = [];
                             userContent.push({
                                 type: 'text',
@@ -166,13 +201,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                                 if (part.type === 'text') {
                                     userContent.push({ type: 'text', text: part.text });
                                 } else if (part.type === 'media' && part.mediaType.startsWith('image/')) {
-                                    const mediaType = part.mediaType === 'image/*' ? 'image/jpeg' : part.mediaType;
-                                    userContent.push({
-                                        type: 'image_url',
-                                        image_url: {
-                                            url: `data:${mediaType};base64,${part.data}`,
-                                        },
-                                    });
+                                    userContent.push(createImageContentPart(part.mediaType, part.data));
+                                } else if (part.type === 'media' && part.mediaType.startsWith('video/')) {
+                                    userContent.push(createVideoContentPart(part.mediaType, part.data));
+                                } else if (part.type === 'media' && part.mediaType.startsWith('audio/')) {
+                                    userContent.push(createAudioContentPart(part.mediaType, part.data));
                                 }
                             }
 
