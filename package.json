@@ -1,6 +1,6 @@
 {
   "name": "venice-ai-sdk-provider",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "Venice AI provider for the Vercel AI SDK",
   "license": "Apache-2.0",
   "sideEffects": false,
