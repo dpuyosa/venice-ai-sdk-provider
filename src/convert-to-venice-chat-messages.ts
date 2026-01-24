@@ -8,6 +8,21 @@ function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata
     return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
 }
 
+function extractAudioFormat(mimeType: string): 'wav' | 'mp3' | 'aiff' | 'aac' | 'ogg' | 'flac' | 'm4a' | 'pcm16' | 'pcm24' {
+    const formatMap: Record<string, 'wav' | 'mp3' | 'aiff' | 'aac' | 'ogg' | 'flac' | 'm4a' | 'pcm16' | 'pcm24'> = {
+        'audio/wav': 'wav',
+        'audio/mpeg': 'mp3',
+        'audio/mp3': 'mp3',
+        'audio/aiff': 'aiff',
+        'audio/aac': 'aac',
+        'audio/ogg': 'ogg',
+        'audio/flac': 'flac',
+        'audio/m4a': 'm4a',
+        'audio/pcm': 'pcm16',
+    };
+    return formatMap[mimeType.toLowerCase()] ?? 'wav';
+}
+
 export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, forceContentArray: boolean): VeniceChatPrompt {
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
@@ -47,6 +62,37 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, force
                                         type: 'image_url',
                                         image_url: {
                                             url: part.data instanceof URL ? part.data.toString() : `data:${mediaType};base64,${convertToBase64(part.data)}`,
+                                        },
+                                        ...partMetadata,
+                                    };
+                                } else if (part.mediaType.startsWith('audio/')) {
+                                    if (part.data instanceof URL) {
+                                        throw new UnsupportedFunctionalityError({
+                                            functionality: 'Audio URLs are not supported. Use base64-encoded audio data.',
+                                        });
+                                    }
+                                    return {
+                                        type: 'input_audio',
+                                        input_audio: {
+                                            data: convertToBase64(part.data),
+                                            format: extractAudioFormat(part.mediaType),
+                                        },
+                                        ...partMetadata,
+                                    };
+                                } else if (part.mediaType.startsWith('video/')) {
+                                    const mimeType = part.mediaType === 'video/*' ? 'video/mp4' : part.mediaType.toLowerCase();
+                                    const isValidVideo = ['video/mp4', 'video/mpeg', 'video/mov', 'video/webm'].includes(mimeType);
+
+                                    if (!isValidVideo) {
+                                        throw new UnsupportedFunctionalityError({
+                                            functionality: `Unsupported video format: ${part.mediaType}`,
+                                        });
+                                    }
+
+                                    return {
+                                        type: 'video_url',
+                                        video_url: {
+                                            url: part.data instanceof URL ? part.data.toString() : `data:${mimeType};base64,${convertToBase64(part.data)}`,
                                         },
                                         ...partMetadata,
                                     };
