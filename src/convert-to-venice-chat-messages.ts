@@ -31,9 +31,9 @@ function isGeminiModel(modelId: string): boolean {
     return modelId.toLowerCase().includes('gemini');
 }
 
-// function isGptModel(modelId: string): boolean {
-//     return modelId.toLowerCase().includes('gpt');
-// }
+function isGptModel(modelId: string): boolean {
+    return modelId.toLowerCase().includes('gpt');
+}
 
 function createImageContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartImage & object {
     const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
@@ -84,6 +84,7 @@ function createAudioContentPart(mediaType: string, data: LanguageModelV2DataCont
 export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, modelId: string): VeniceChatPrompt {
     const forceContentArray = isClaudeModel(modelId);
     const supportsVideoAndAudio = isGeminiModel(modelId);
+    const isGpt = isGptModel(modelId);
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
         switch (role) {
@@ -224,6 +225,17 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                             if (mediaParts.length > 0) {
                                 Object.assign(mediaParts.at(-1)!, partMetadata);
                                 mediaUserContent.push(...mediaParts);
+                            }
+
+                            // For GPT models, also emit a tool message with text-only content
+                            if (isGpt) {
+                                const textOnlyContent = textParts.join('\n') || '\n';
+                                messages.push({
+                                    role: 'tool',
+                                    tool_call_id: toolResponse.toolCallId,
+                                    content: textOnlyContent,
+                                    ...getVeniceMetadata({ providerOptions }),
+                                });
                             }
 
                             continue; // Skip creating individual tool message
