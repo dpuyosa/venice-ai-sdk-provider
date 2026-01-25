@@ -31,6 +31,10 @@ function isGeminiModel(modelId: string): boolean {
     return modelId.toLowerCase().includes('gemini');
 }
 
+// function isGptModel(modelId: string): boolean {
+//     return modelId.toLowerCase().includes('gpt');
+// }
+
 function createImageContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartImage & object {
     const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
     return {
@@ -180,47 +184,53 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
             }
 
             case 'tool': {
+                // Accumulator for ALL media-containing tool results
+                const mediaUserContent: Array<VeniceUserMessageContentPart> = [];
+
                 for (const toolResponse of content) {
                     const partMetadata = getVeniceMetadata(toolResponse);
                     const output = toolResponse.output;
 
                     // Check if output contains media (only possible with 'content' type)
-                    if (output.type === 'content') {
+                    if (output.type === 'content' && mediaUserContent.length < 20) {
                         const hasImage = output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('image/'));
                         const hasVideo = supportsVideoAndAudio && output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('video/'));
                         const hasAudio = supportsVideoAndAudio && output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('audio/'));
 
                         if (hasImage || hasVideo || hasAudio) {
-                            const userContent: Array<VeniceUserMessageContentPart> = [];
-                            userContent.push({
+                            // Collect all text parts into a single string
+                            const textParts = output.value.filter((part) => part.type === 'text').map((part) => part.text);
+                            const textContent = textParts.length > 0 ? `[Tool Result: ${toolResponse.toolCallId}]\n${textParts.join('\n')}` : `[Tool Result: ${toolResponse.toolCallId}]`;
+
+                            // Add single text part for this tool result
+                            mediaUserContent.push({
                                 type: 'text',
-                                text: `[Tool Result: ${toolResponse.toolCallId}]`,
+                                text: textContent,
                             });
 
+                            // Collect all media parts for this tool result
+                            const mediaParts: Array<VeniceUserMessageContentPart> = [];
                             for (const part of output.value) {
-                                if (part.type === 'text') {
-                                    userContent.push({ type: 'text', text: part.text });
-                                } else if (part.type === 'media' && part.mediaType.startsWith('image/')) {
-                                    userContent.push(createImageContentPart(part.mediaType, part.data));
+                                if (part.type === 'media' && part.mediaType.startsWith('image/')) {
+                                    mediaParts.push(createImageContentPart(part.mediaType, part.data));
                                 } else if (part.type === 'media' && part.mediaType.startsWith('video/')) {
-                                    userContent.push(createVideoContentPart(part.mediaType, part.data));
+                                    mediaParts.push(createVideoContentPart(part.mediaType, part.data));
                                 } else if (part.type === 'media' && part.mediaType.startsWith('audio/')) {
-                                    userContent.push(createAudioContentPart(part.mediaType, part.data));
+                                    mediaParts.push(createAudioContentPart(part.mediaType, part.data));
                                 }
                             }
 
-                            if (userContent.length) Object.assign(userContent.at(-1)!, partMetadata);
+                            // Apply partMetadata to last media part of this tool result
+                            if (mediaParts.length > 0) {
+                                Object.assign(mediaParts.at(-1)!, partMetadata);
+                                mediaUserContent.push(...mediaParts);
+                            }
 
-                            messages.push({
-                                role: 'user',
-                                content: userContent,
-                                ...getVeniceMetadata({ providerOptions }),
-                            });
-                            continue;
+                            continue; // Skip creating individual tool message
                         }
                     }
 
-                    // Default behavior: create tool message
+                    // Default behavior: create tool message for non-media results
                     let contentValue: string;
                     switch (output.type) {
                         case 'text':
@@ -241,6 +251,16 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                         ...getVeniceMetadata({ providerOptions }),
                     });
                 }
+
+                // Push single combined user message AFTER all non-media tool messages
+                if (mediaUserContent.length > 0) {
+                    messages.push({
+                        role: 'user',
+                        content: mediaUserContent,
+                        ...getVeniceMetadata({ providerOptions }),
+                    });
+                }
+
                 break;
             }
 
