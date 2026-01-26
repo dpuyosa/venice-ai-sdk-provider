@@ -1,7 +1,7 @@
 import type { z } from 'zod/v4';
 import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
-import type { MetadataExtractor, ProviderErrorStructure } from '@ai-sdk/openai-compatible';
+import type { ProviderErrorStructure } from '@ai-sdk/openai-compatible';
 import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
 import type { APICallError, LanguageModelV2, LanguageModelV2CallOptions, LanguageModelV2Content, LanguageModelV2FinishReason, LanguageModelV2StreamPart, SharedV2ProviderMetadata } from '@ai-sdk/provider';
 
@@ -23,7 +23,6 @@ export interface VeniceChatConfig {
     fetch?: FetchFunction;
     includeUsage?: boolean;
     errorStructure?: ProviderErrorStructure<any>;
-    metadataExtractor?: MetadataExtractor;
     supportsStructuredOutputs?: boolean;
     supportedUrls?: () => LanguageModelV2['supportedUrls'];
 }
@@ -154,6 +153,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
         const choice = responseBody.choices[0];
         const content: Array<LanguageModelV2Content> = [];
+        const providerOptionsName = this.providerOptionsName;
 
         const text = choice?.message.content ?? null;
         if (text != null && text.length > 0) content.push({ type: 'text', text });
@@ -169,18 +169,20 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                     toolCallId: toolCall.id ?? generateId(),
                     toolName: toolCall.function.name,
                     input: toolCall.function.arguments!,
-                    ...(thoughtSignature ? { providerMetadata: { [this.providerOptionsName]: { thoughtSignature } } } : {}),
+                    ...(thoughtSignature ? { providerMetadata: { [providerOptionsName]: { thoughtSignature } } } : {}),
                 });
             }
         }
 
-        const usage = responseBody.usage;
-        const providerMetadata: SharedV2ProviderMetadata = { [this.providerOptionsName]: usage ? { usage } : {} };
+        const veniceUsage = convertVeniceChatUsage(responseBody.usage);
+        const providerMetadata: SharedV2ProviderMetadata = {
+            [providerOptionsName]: veniceUsage ? { usage: veniceUsage } : {},
+        } as SharedV2ProviderMetadata;
 
         return {
             content,
             finishReason: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? 'other',
-            usage: convertVeniceChatUsage(usage),
+            usage: veniceUsage,
             providerMetadata,
             request: { body },
             response: {
@@ -199,8 +201,6 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
             stream: true,
             stream_options: this.config.includeUsage ? { includeUsage: true } : undefined,
         };
-
-        const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
 
         const { responseHeaders, value: response } = await postJsonToApi({
             url: this.config.url({ path: '/chat/completions', modelId: this.modelId }),
@@ -245,8 +245,6 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                             controller.enqueue({ type: 'error', error: chunk.error });
                             return;
                         }
-
-                        metadataExtractor?.processChunk(chunk.rawValue);
 
                         if ('error' in chunk.value) {
                             finishReason = 'error';
@@ -480,15 +478,15 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                             });
                         }
 
+                        const veniceUsage = convertVeniceChatUsage(usage);
                         const providerMetadata: SharedV2ProviderMetadata = {
-                            [providerOptionsName]: usage ? { usage } : {},
-                            ...metadataExtractor?.buildMetadata(),
-                        };
+                            [providerOptionsName]: veniceUsage ? { usage: veniceUsage } : {},
+                        } as SharedV2ProviderMetadata;
 
                         controller.enqueue({
                             type: 'finish',
                             finishReason,
-                            usage: convertVeniceChatUsage(usage),
+                            usage: veniceUsage,
                             providerMetadata,
                         });
                     },
