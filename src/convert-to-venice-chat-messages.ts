@@ -84,7 +84,6 @@ function createAudioContentPart(mediaType: string, data: LanguageModelV2DataCont
 export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, modelId: string): VeniceChatPrompt {
     const forceContentArray = isClaudeModel(modelId);
     const supportsVideoAndAudio = isGeminiModel(modelId);
-    const isGpt = isGptModel(modelId);
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
         switch (role) {
@@ -173,11 +172,12 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                 }
 
                 if (!(assistantText.length || toolCalls.length)) break;
+                if (!assistantText.length) assistantText = '\n';
 
                 messages.push({
                     role: 'assistant',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-                    content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText === '' ? '\n' : assistantText, ...assistantMetadata }] : assistantText,
+                    content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
                     ...getVeniceMetadata({ providerOptions }),
                 });
 
@@ -227,16 +227,14 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                                 mediaUserContent.push(...mediaParts);
                             }
 
-                            // For GPT models, also emit a tool message with text-only content
-                            if (isGpt) {
-                                const textOnlyContent = textParts.join('\n') || '\n';
-                                messages.push({
-                                    role: 'tool',
-                                    tool_call_id: toolResponse.toolCallId,
-                                    content: textOnlyContent,
-                                    ...getVeniceMetadata({ providerOptions }),
-                                });
-                            }
+                            // Emit a tool message with text-only content for compatibility
+                            const textOnlyContent = textParts.join('\n') || '\n';
+                            messages.push({
+                                role: 'tool',
+                                tool_call_id: toolResponse.toolCallId,
+                                content: textOnlyContent,
+                                ...getVeniceMetadata({ providerOptions }),
+                            });
 
                             continue; // Skip creating individual tool message
                         }
