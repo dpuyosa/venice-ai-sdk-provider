@@ -5,14 +5,11 @@ The [Venice](https://venice.ai/) provider for the [Vercel AI SDK](https://sdk.ve
 ## Setup
 
 ```bash
-# For pnpm
-pnpm add venice-ai-sdk-provider
+# For bun
+bun add venice-ai-sdk-provider
 
 # For npm
 npm install venice-ai-sdk-provider
-
-# For yarn
-yarn add venice-ai-sdk-provider
 ```
 
 ## Provider Instance
@@ -21,14 +18,15 @@ You can import the default provider instance `venice` from `venice-ai-sdk-provid
 
 ```ts
 import { venice } from 'venice-ai-sdk-provider';
-const model = venice("venice-uncensored");
+const model = venice('venice-uncensored');
 ```
 
 Or instance it manually:
+
 ```ts
 import { createVenice } from 'venice-ai-sdk-provider';
-const venice = createVenice({ apiKey: "your-api-key" });
-const model = venice("venice-uncensored");
+const venice = createVenice({ apiKey: 'your-api-key' });
+const model = venice('venice-uncensored');
 ```
 
 ## Example
