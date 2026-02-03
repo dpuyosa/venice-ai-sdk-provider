@@ -9,7 +9,7 @@ import { prepareTools } from './venice-prepare-tools';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
 import { convertVeniceChatUsage } from './venice-chat-usage';
 import { defaultVeniceErrorStructure } from './venice-error';
-import { veniceLanguageModelOptions } from './venice-chat-options';
+import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
 import { prepareVeniceParameters } from './venice-prepare-parameters';
 import { convertToVeniceChatMessages } from './convert-to-venice-chat-messages';
 import { createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
@@ -67,8 +67,8 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
     private async getArgs(options: LanguageModelV2CallOptions) {
         const compatibleOptions = Object.assign(
-            (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {},
-            (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptions })) ?? {}
+            (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
+            (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
         ) as VeniceLanguageModelOptions;
 
         const { tools: veniceTools, toolChoice: veniceToolChoice } = prepareTools({

@@ -14,7 +14,7 @@ export const veniceParametersSchema = z.object({
     returnSearchResultsAsDocuments: z.boolean().optional(),
 });
 
-export const veniceLanguageModelOptions = z.object({
+export const veniceLanguageModelOptionsSchema = z.object({
     veniceParameters: veniceParametersSchema.default({ includeVeniceSystemPrompt: false }),
 
     topLogprobs: z.int().positive().optional(),
@@ -62,4 +62,4 @@ export const veniceLanguageModelOptions = z.object({
     n: z.int().min(1).default(1),
 });
 
-export type VeniceLanguageModelOptions = z.infer<typeof veniceLanguageModelOptions>;
+export type VeniceLanguageModelOptions = z.infer<typeof veniceLanguageModelOptionsSchema>;
