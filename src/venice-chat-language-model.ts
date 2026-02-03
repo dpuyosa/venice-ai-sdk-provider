@@ -27,6 +27,20 @@ export interface VeniceChatConfig {
     supportedUrls?: () => LanguageModelV2['supportedUrls'];
 }
 
+function mockReasoningChunk(isMocking: boolean, delta: any) {
+    if ((!isMocking && delta.content?.trimStart().startsWith('<think>')) || isMocking) {
+        let mocking = delta.content?.trimEnd().endsWith('</think>') ? false : true;
+
+        if (delta.content?.trimStart().startsWith('<think>')) delta.content = delta.content?.replace('<think>', '');
+        if (delta.content?.trimEnd().endsWith('</think>')) delta.content = delta.content?.replace('</think>', '');
+
+        delta.reasoning_content = delta.content;
+        delta.content = null;
+        return mocking;
+    }
+    return false;
+}
+
 export class VeniceChatLanguageModel implements LanguageModelV2 {
     readonly specificationVersion = 'v2';
     readonly modelId: string;
@@ -227,6 +241,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         let isFirstChunk = true;
         let isActiveText = false;
         let isActiveReasoning = false;
+        let isMockReasoning = false;
 
         return {
             stream: response.pipeThrough(
@@ -280,6 +295,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         }
 
                         const delta = choice.delta;
+                        isMockReasoning = mockReasoningChunk(isMockReasoning, delta);
 
                         const reasoningContent = delta.reasoning_content ?? delta.reasoning;
                         if (reasoningContent) {
