@@ -28,17 +28,61 @@ export interface VeniceChatConfig {
 }
 
 function mockReasoningChunk(isMocking: boolean, delta: any) {
-    if ((!isMocking && delta.content?.trimStart().startsWith('<think>')) || isMocking) {
-        let mocking = delta.content?.trimEnd().endsWith('</think>') ? false : true;
+    if ((!isMocking && delta.content?.startsWith('<think>')) || isMocking) {
+        let mocking = delta.content?.endsWith('</think>') ? false : true;
 
-        if (delta.content?.trimStart().startsWith('<think>')) delta.content = delta.content?.replace('<think>', '');
-        if (delta.content?.trimEnd().endsWith('</think>')) delta.content = delta.content?.replace('</think>', '');
+        if (delta.content?.startsWith('<think>')) delta.content = delta.content?.replace('<think>', '');
+        if (delta.content?.endsWith('</think>')) delta.content = delta.content?.replace('</think>', '');
 
         delta.reasoning_content = delta.content;
         delta.content = null;
         return mocking;
     }
     return false;
+}
+
+function mockReasoningContent(text: string): Array<{ type: 'text' | 'reasoning'; content: string }> {
+    const result: Array<{ type: 'text' | 'reasoning'; content: string }> = [];
+    let currentIndex = 0;
+
+    while (currentIndex < text.length) {
+        const thinkStartIndex = text.indexOf('<think>', currentIndex);
+
+        // No more <think> tags found
+        if (thinkStartIndex === -1) {
+            const remainingText = text.slice(currentIndex);
+            if (remainingText.length > 0) {
+                result.push({ type: 'text', content: remainingText });
+            }
+            break;
+        }
+
+        // Add text before <think> tag
+        if (thinkStartIndex > currentIndex) {
+            const textBefore = text.slice(currentIndex, thinkStartIndex);
+            result.push({ type: 'text', content: textBefore });
+        }
+
+        // Find matching </think> tag
+        const thinkEndIndex = text.indexOf('</think>', thinkStartIndex);
+
+        if (thinkEndIndex === -1) {
+            // No closing tag found, treat rest as regular text
+            const remainingText = text.slice(thinkStartIndex);
+            result.push({ type: 'text', content: remainingText });
+            break;
+        }
+
+        // Extract reasoning content between tags
+        const reasoningContent = text.slice(thinkStartIndex + 7, thinkEndIndex); // 7 = '<think>'.length
+        if (reasoningContent.length > 0) {
+            result.push({ type: 'reasoning', content: reasoningContent });
+        }
+
+        currentIndex = thinkEndIndex + 8; // 8 = '</think>'.length
+    }
+
+    return result;
 }
 
 export class VeniceChatLanguageModel implements LanguageModelV2 {
@@ -170,10 +214,17 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         const providerOptionsName = this.providerOptionsName;
 
         const text = choice?.message.content ?? null;
-        if (text != null && text.length > 0) content.push({ type: 'text', text });
-
         const reasoning = choice?.message.reasoning_content ?? choice?.message.reasoning ?? null;
-        if (reasoning != null && reasoning.length > 0) content.push({ type: 'reasoning', text: reasoning });
+
+        if (reasoning != null && reasoning.length > 0) {
+            if (text != null && text.length > 0) content.push({ type: 'text', text });
+            content.push({ type: 'reasoning', text: reasoning });
+        } else if (text != null && text.length > 0) {
+            const segments = mockReasoningContent(text);
+            for (const segment of segments) {
+                content.push({ type: segment.type, text: segment.content });
+            }
+        }
 
         if (choice?.message?.tool_calls) {
             for (const toolCall of choice.message.tool_calls) {
