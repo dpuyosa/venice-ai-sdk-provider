@@ -85,6 +85,11 @@ function mockReasoningContent(text: string): Array<{ type: 'text' | 'reasoning';
     return result;
 }
 
+function isThinkingModel(modelId: string) {
+    // These models output thinking tag
+    return ['qwen3-4b', 'minimax-m21'].includes(modelId);
+}
+
 export class VeniceChatLanguageModel implements LanguageModelV2 {
     readonly specificationVersion = 'v2';
     readonly modelId: string;
@@ -216,9 +221,9 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         const text = choice?.message.content ?? null;
         const reasoning = choice?.message.reasoning_content ?? choice?.message.reasoning ?? null;
 
-        if (reasoning != null && reasoning.length > 0) {
-            if (text != null && text.length > 0) content.push({ type: 'text', text });
-            content.push({ type: 'reasoning', text: reasoning });
+        if (!isThinkingModel(this.modelId)) {
+            if (text !== null && text.length > 0) content.push({ type: 'text', text });
+            if (reasoning != null && reasoning.length > 0) content.push({ type: 'reasoning', text: reasoning });
         } else if (text != null && text.length > 0) {
             const segments = mockReasoningContent(text);
             for (const segment of segments) {
@@ -288,11 +293,12 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         let finishReason: LanguageModelV2FinishReason = 'other';
 
         const providerOptionsName = this.providerOptionsName;
+        const mockReasoning = isThinkingModel(this.modelId);
         let usage: VeniceTokenUsage = undefined;
         let isFirstChunk = true;
         let isActiveText = false;
         let isActiveReasoning = false;
-        let isMockReasoning = false;
+        let isMockingReasoning = false;
 
         return {
             stream: response.pipeThrough(
@@ -346,7 +352,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         }
 
                         const delta = choice.delta;
-                        isMockReasoning = mockReasoningChunk(isMockReasoning, delta);
+                        if (mockReasoning) isMockingReasoning = mockReasoningChunk(isMockingReasoning, delta);
 
                         const reasoningContent = delta.reasoning_content ?? delta.reasoning;
                         if (reasoningContent) {
