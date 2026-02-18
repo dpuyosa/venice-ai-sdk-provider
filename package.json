@@ -1,6 +1,6 @@
 {
     "name": "venice-ai-sdk-provider",
-    "version": "1.1.18",
+    "version": "2.0.0",
     "description": "Venice AI provider for the Vercel AI SDK",
     "license": "Apache-2.0",
     "sideEffects": false,
@@ -37,12 +37,12 @@
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "^1.0.32",
-        "@ai-sdk/provider": "^2.0.1",
-        "@ai-sdk/provider-utils": "^3.0.20"
+        "@ai-sdk/openai-compatible": "^2.0.30",
+        "@ai-sdk/provider": "^3.0.8",
+        "@ai-sdk/provider-utils": "^4.0.15"
     },
     "devDependencies": {
-        "@types/node": "^25.2.0",
+        "@types/node": "^25.2.3",
         "husky": "^9.1.7",
         "lint-staged": "^16.2.7",
         "prettier": "^3.8.1",
@@ -51,7 +51,7 @@
         "zod": "^4.3.6"
     },
     "peerDependencies": {
-        "ai": "^5.0.121"
+        "ai": "^6.0.90"
     },
     "engines": {
         "node": ">=18"

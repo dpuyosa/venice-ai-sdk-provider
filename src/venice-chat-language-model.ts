@@ -3,7 +3,7 @@ import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
 import type { ProviderErrorStructure } from '@ai-sdk/openai-compatible';
 import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
-import type { APICallError, LanguageModelV2, LanguageModelV2CallOptions, LanguageModelV2Content, LanguageModelV2FinishReason, LanguageModelV2StreamPart, SharedV2ProviderMetadata } from '@ai-sdk/provider';
+import type { APICallError, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3Content, LanguageModelV3FinishReason, LanguageModelV3StreamPart, SharedV3ProviderMetadata } from '@ai-sdk/provider';
 
 import { prepareTools } from './venice-prepare-tools';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
@@ -24,7 +24,7 @@ export interface VeniceChatConfig {
     includeUsage?: boolean;
     errorStructure?: ProviderErrorStructure<any>;
     supportsStructuredOutputs?: boolean;
-    supportedUrls?: () => LanguageModelV2['supportedUrls'];
+    supportedUrls?: () => LanguageModelV3['supportedUrls'];
 }
 
 function mockReasoningChunk(isMocking: boolean, delta: any) {
@@ -87,11 +87,11 @@ function mockReasoningContent(text: string): Array<{ type: 'text' | 'reasoning';
 
 function isThinkingModel(modelId: string) {
     // These models output thinking tag
-    return ['qwen3-4b', 'minimax-m21'].includes(modelId);
+    return ['qwen3-4b'].includes(modelId);
 }
 
-export class VeniceChatLanguageModel implements LanguageModelV2 {
-    readonly specificationVersion = 'v2';
+export class VeniceChatLanguageModel implements LanguageModelV3 {
+    readonly specificationVersion = 'v3';
     readonly modelId: string;
     readonly config: VeniceChatConfig;
     private readonly failedResponseHandler: ResponseHandler<APICallError>;
@@ -128,10 +128,11 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         );
     }
 
-    private async getArgs(options: LanguageModelV2CallOptions) {
+    private async getArgs(options: LanguageModelV3CallOptions) {
         const compatibleOptions = Object.assign(
             (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
-            (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
+            (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
+            (await parseProviderOptions({ provider: 'openaiCompatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
         ) as VeniceLanguageModelOptions;
 
         const { tools: veniceTools, toolChoice: veniceToolChoice } = prepareTools({
@@ -196,7 +197,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         };
     }
 
-    async doGenerate(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2['doGenerate']>>> {
+    async doGenerate(options: LanguageModelV3CallOptions): Promise<Awaited<ReturnType<LanguageModelV3['doGenerate']>>> {
         const { args, warnings } = await this.getArgs(options);
         const body = { ...args, stream: false };
 
@@ -215,7 +216,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         });
 
         const choice = responseBody.choices[0];
-        const content: Array<LanguageModelV2Content> = [];
+        const content: Array<LanguageModelV3Content> = [];
         const providerOptionsName = this.providerOptionsName;
 
         const text = choice?.message.content ?? null;
@@ -245,13 +246,16 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         }
 
         const veniceUsage = convertVeniceChatUsage(responseBody.usage);
-        const providerMetadata: SharedV2ProviderMetadata = {
+        const providerMetadata: SharedV3ProviderMetadata = {
             [providerOptionsName]: veniceUsage ? { usage: veniceUsage } : {},
-        } as SharedV2ProviderMetadata;
+        } as SharedV3ProviderMetadata;
 
         return {
             content,
-            finishReason: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? 'other',
+            finishReason: {
+                unified: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? 'other',
+                raw: choice?.finish_reason ?? undefined,
+            },
             usage: veniceUsage,
             providerMetadata,
             request: { body },
@@ -264,7 +268,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
         };
     }
 
-    async doStream(options: LanguageModelV2CallOptions): Promise<Awaited<ReturnType<LanguageModelV2['doStream']>>> {
+    async doStream(options: LanguageModelV3CallOptions): Promise<Awaited<ReturnType<LanguageModelV3['doStream']>>> {
         const { args, warnings } = await this.getArgs(options);
         const body = {
             ...args,
@@ -290,7 +294,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
             thoughtSignature?: string;
         }> = [];
 
-        let finishReason: LanguageModelV2FinishReason = 'other';
+        let finishReason: LanguageModelV3FinishReason = { unified: 'other', raw: undefined };
 
         const providerOptionsName = this.providerOptionsName;
         const mockReasoning = isThinkingModel(this.modelId);
@@ -302,7 +306,7 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
 
         return {
             stream: response.pipeThrough(
-                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV2StreamPart>({
+                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV3StreamPart>({
                     start(controller) {
                         controller.enqueue({ type: 'stream-start', warnings });
                     },
@@ -313,13 +317,13 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         }
 
                         if (!chunk.success) {
-                            finishReason = 'error';
+                            finishReason = { unified: 'error', raw: undefined };
                             controller.enqueue({ type: 'error', error: chunk.error });
                             return;
                         }
 
                         if ('error' in chunk.value) {
-                            finishReason = 'error';
+                            finishReason = { unified: 'error', raw: undefined };
                             controller.enqueue({ type: 'error', error: chunk.value.error.message });
                             return;
                         }
@@ -344,7 +348,10 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         const choice = value.choices[0];
 
                         if (choice?.finish_reason != null) {
-                            finishReason = mapOpenAICompatibleFinishReason(choice.finish_reason) ?? 'other';
+                            finishReason = {
+                                unified: mapOpenAICompatibleFinishReason(choice.finish_reason) ?? 'other',
+                                raw: choice.finish_reason,
+                            };
                         }
 
                         if (choice?.delta == null) {
@@ -552,9 +559,9 @@ export class VeniceChatLanguageModel implements LanguageModelV2 {
                         }
 
                         const veniceUsage = convertVeniceChatUsage(usage);
-                        const providerMetadata: SharedV2ProviderMetadata = {
+                        const providerMetadata: SharedV3ProviderMetadata = {
                             [providerOptionsName]: veniceUsage ? { usage: veniceUsage } : {},
-                        } as SharedV2ProviderMetadata;
+                        } as SharedV3ProviderMetadata;
 
                         controller.enqueue({
                             type: 'finish',

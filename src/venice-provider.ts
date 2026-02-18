@@ -1,4 +1,4 @@
-import type { ProviderV2 } from '@ai-sdk/provider';
+import type { ProviderV3 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 
 import { VERSION } from './version';
@@ -48,7 +48,7 @@ export interface VeniceProviderSettings {
     supportsStructuredOutputs?: boolean;
 }
 
-export interface VeniceProvider extends ProviderV2 {
+export interface VeniceProvider extends ProviderV3 {
     (modelId: string): VeniceChatLanguageModel;
     languageModel(modelId: string): VeniceChatLanguageModel;
     chatModel(modelId: string): VeniceChatLanguageModel;
@@ -100,15 +100,13 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
     const createEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getCommonModelConfig('embedding'));
 
     const provider = (modelId: string) => createLanguageModel(modelId);
+    provider.specificationVersion = 'v3' as const;
     provider.chatModel = createChatModel;
 
     provider.languageModel = createLanguageModel;
     provider.imageModel = createImageModel;
     provider.embeddingModel = createEmbeddingModel;
     provider.completionModel = createCompletionModel;
-
-    // V2
-    provider.textEmbeddingModel = provider.embeddingModel;
 
     return provider as VeniceProvider;
 }

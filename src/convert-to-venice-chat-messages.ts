@@ -1,11 +1,13 @@
 import type { VeniceChatPrompt, VeniceUserMessageContentPart, VeniceContentPartImage, VeniceContentPartVideo, VeniceContentPartAudio } from './venice-chat-message';
-import type { LanguageModelV2Prompt, SharedV2ProviderMetadata, LanguageModelV2DataContent } from '@ai-sdk/provider';
+import type { LanguageModelV3Prompt, SharedV3ProviderMetadata, LanguageModelV3DataContent } from '@ai-sdk/provider';
 
 import { convertToBase64 } from '@ai-sdk/provider-utils';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
-function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata }) {
-    return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
+function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
+    const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
+    const venice = message?.providerOptions?.venice ?? {};
+    return { ...openaiCompatible, ...venice };
 }
 
 function extractAudioFormat(mimeType: string): 'wav' | 'mp3' | 'aiff' | 'aac' | 'ogg' | 'flac' | 'm4a' | 'pcm16' | 'pcm24' {
@@ -27,15 +29,7 @@ function isClaudeModel(modelId: string): boolean {
     return modelId.toLowerCase().includes('claude');
 }
 
-function isGeminiModel(modelId: string): boolean {
-    return modelId.toLowerCase().includes('gemini');
-}
-
-function isGptModel(modelId: string): boolean {
-    return modelId.toLowerCase().includes('gpt');
-}
-
-function createImageContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartImage & object {
+function createImageContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartImage & object {
     const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
     return {
         type: 'image_url',
@@ -46,7 +40,7 @@ function createImageContentPart(mediaType: string, data: LanguageModelV2DataCont
     };
 }
 
-function createVideoContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartVideo & object {
+function createVideoContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartVideo & object {
     const mimeType = mediaType === 'video/*' ? 'video/mp4' : mediaType.toLowerCase();
     const isValidVideo = ['video/mp4', 'video/mpeg', 'video/mov', 'video/webm'].includes(mimeType);
 
@@ -65,7 +59,7 @@ function createVideoContentPart(mediaType: string, data: LanguageModelV2DataCont
     };
 }
 
-function createAudioContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartAudio & object {
+function createAudioContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartAudio & object {
     if (data instanceof URL) {
         throw new UnsupportedFunctionalityError({
             functionality: 'Audio URLs are not supported. Use base64-encoded audio data.',
@@ -81,9 +75,17 @@ function createAudioContentPart(mediaType: string, data: LanguageModelV2DataCont
     };
 }
 
-export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, modelId: string): VeniceChatPrompt {
+function createTextContentPart(_mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceUserMessageContentPart & object {
+    const textContent = data instanceof URL ? data.toString() : typeof data === 'string' ? data : new TextDecoder().decode(data);
+    return {
+        type: 'text',
+        text: textContent,
+        ...partMetadata,
+    };
+}
+
+export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, modelId: string): VeniceChatPrompt {
     const forceContentArray = isClaudeModel(modelId);
-    const supportsVideoAndAudio = isGeminiModel(modelId);
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
         switch (role) {
@@ -119,19 +121,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                                 if (part.mediaType.startsWith('image/')) {
                                     return createImageContentPart(part.mediaType, part.data, partMetadata);
                                 } else if (part.mediaType.startsWith('audio/')) {
-                                    if (!supportsVideoAndAudio) {
-                                        throw new UnsupportedFunctionalityError({
-                                            functionality: 'Audio content is only supported for Gemini models.',
-                                        });
-                                    }
                                     return createAudioContentPart(part.mediaType, part.data, partMetadata);
                                 } else if (part.mediaType.startsWith('video/')) {
-                                    if (!supportsVideoAndAudio) {
-                                        throw new UnsupportedFunctionalityError({
-                                            functionality: 'Video content is only supported for Gemini models.',
-                                        });
-                                    }
                                     return createVideoContentPart(part.mediaType, part.data, partMetadata);
+                                } else if (part.mediaType.startsWith('text/')) {
+                                    return createTextContentPart(part.mediaType, part.data, partMetadata);
                                 } else {
                                     throw new UnsupportedFunctionalityError({
                                         functionality: `file part media type ${part.mediaType}`,
@@ -189,16 +183,19 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                 const mediaUserContent: Array<VeniceUserMessageContentPart> = [];
 
                 for (const toolResponse of content) {
+                    // Skip tool approval responses (they don't have output)
+                    if (toolResponse.type === 'tool-approval-response') {
+                        continue;
+                    }
+
                     const partMetadata = getVeniceMetadata(toolResponse);
                     const output = toolResponse.output;
 
                     // Check if output contains media (only possible with 'content' type)
                     if (output.type === 'content' && mediaUserContent.length < 20) {
-                        const hasImage = output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('image/'));
-                        const hasVideo = supportsVideoAndAudio && output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('video/'));
-                        const hasAudio = supportsVideoAndAudio && output.value.some((part) => part.type === 'media' && part.mediaType.startsWith('audio/'));
+                        const hasMedia = output.value.some((part) => ['image-data', 'image-url', 'file-data', 'file-url'].includes(part.type));
 
-                        if (hasImage || hasVideo || hasAudio) {
+                        if (hasMedia) {
                             // Collect all text parts into a single string
                             const textParts = output.value.filter((part) => part.type === 'text').map((part) => part.text);
                             const textContent = textParts.length > 0 ? `[Tool Result: ${toolResponse.toolCallId}]\n${textParts.join('\n')}` : `[Tool Result: ${toolResponse.toolCallId}]`;
@@ -212,12 +209,27 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                             // Collect all media parts for this tool result
                             const mediaParts: Array<VeniceUserMessageContentPart> = [];
                             for (const part of output.value) {
-                                if (part.type === 'media' && part.mediaType.startsWith('image/')) {
+                                if (part.type === 'image-data') {
                                     mediaParts.push(createImageContentPart(part.mediaType, part.data));
-                                } else if (part.type === 'media' && part.mediaType.startsWith('video/')) {
-                                    mediaParts.push(createVideoContentPart(part.mediaType, part.data));
-                                } else if (part.type === 'media' && part.mediaType.startsWith('audio/')) {
-                                    mediaParts.push(createAudioContentPart(part.mediaType, part.data));
+                                } else if (part.type === 'image-url') {
+                                    mediaParts.push(createImageContentPart('image/*', new URL(part.url)));
+                                } else if (part.type === 'file-data') {
+                                    if (part.mediaType?.startsWith('video/')) {
+                                        mediaParts.push(createVideoContentPart(part.mediaType, part.data));
+                                    } else if (part.mediaType?.startsWith('audio/')) {
+                                        mediaParts.push(createAudioContentPart(part.mediaType, part.data));
+                                    } else
+                                        throw new UnsupportedFunctionalityError({
+                                            functionality: `file part media type ${part.mediaType}`,
+                                        });
+                                } else if (part.type === 'file-url') {
+                                    const url = new URL(part.url);
+                                    if (url.pathname.match(/\.(mp4|mpeg|mov|webm)$/i)) {
+                                        mediaParts.push(createVideoContentPart('video/*', url));
+                                    } else
+                                        throw new UnsupportedFunctionalityError({
+                                            functionality: `file part media ${part.url}`,
+                                        });
                                 }
                             }
 
@@ -225,18 +237,18 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                             if (mediaParts.length > 0) {
                                 Object.assign(mediaParts.at(-1)!, partMetadata);
                                 mediaUserContent.push(...mediaParts);
+
+                                // Emit a tool message with text-only content for compatibility
+                                const textOnlyContent = textParts.join('\n') || '\n';
+                                messages.push({
+                                    role: 'tool',
+                                    tool_call_id: toolResponse.toolCallId,
+                                    content: textOnlyContent,
+                                    ...getVeniceMetadata({ providerOptions }),
+                                });
+
+                                continue; // Skip creating individual tool message
                             }
-
-                            // Emit a tool message with text-only content for compatibility
-                            const textOnlyContent = textParts.join('\n') || '\n';
-                            messages.push({
-                                role: 'tool',
-                                tool_call_id: toolResponse.toolCallId,
-                                content: textOnlyContent,
-                                ...getVeniceMetadata({ providerOptions }),
-                            });
-
-                            continue; // Skip creating individual tool message
                         }
                     }
 
@@ -247,11 +259,16 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                         case 'error-text':
                             contentValue = output.value;
                             break;
+                        case 'execution-denied':
+                            contentValue = output.reason ?? 'Tool execution denied.';
+                            break;
                         case 'content':
                         case 'json':
                         case 'error-json':
                             contentValue = JSON.stringify(output.value);
                             break;
+                        default:
+                            contentValue = '';
                     }
 
                     messages.push({
