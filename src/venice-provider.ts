@@ -1,4 +1,4 @@
-import type { ProviderV3 } from '@ai-sdk/provider';
+import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 
 import { VERSION } from './version';
@@ -52,13 +52,16 @@ export interface VeniceProvider extends ProviderV3 {
     (modelId: string): VeniceChatLanguageModel;
     languageModel(modelId: string): VeniceChatLanguageModel;
     chatModel(modelId: string): VeniceChatLanguageModel;
+    completionModel(modelId: string): LanguageModelV3;
+    imageModel(modelId: string): ImageModelV3;
+    embeddingModel(modelId: string): EmbeddingModelV3;
 
-    imageModel(modelId: string): OpenAICompatibleImageModel;
-    embeddingModel(modelId: string): OpenAICompatibleEmbeddingModel;
+    /** @deprecated Use `embeddingModel` instead. */
+    textEmbeddingModel(modelId: string): EmbeddingModelV3;
 }
 
 export function createVenice(options: VeniceProviderSettings = {}): VeniceProvider {
-    const baseURL = withoutTrailingSlash(options.baseURL ?? 'https://api.venice.ai/api/v1');
+    const baseURL = withoutTrailingSlash(options.baseURL ?? 'https://api.venice.ai/api/v1') as string;
     const providerName = options.name ?? 'venice';
 
     const getHeaders = () =>
@@ -74,7 +77,7 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
             `ai-sdk/venice/${VERSION}`
         );
 
-    const getCommonModelConfig = (modelType: string) => ({
+    const getModelConfig = (modelType: string) => ({
         provider: `${providerName}.${modelType}`,
         url: ({ path }: { path: string }) => {
             const url = new URL(`${baseURL}${path}`);
@@ -89,24 +92,22 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
 
     const createChatModel = (modelId: string) =>
         new VeniceChatLanguageModel(modelId, {
-            ...getCommonModelConfig('chat'),
+            ...getModelConfig('chat'),
             includeUsage: options.includeUsage,
             supportsStructuredOutputs: options.supportsStructuredOutputs,
         });
 
     const createLanguageModel = (modelId: string) => createChatModel(modelId);
-    const createCompletionModel = (modelId: string) => new OpenAICompatibleCompletionLanguageModel(modelId, { ...getCommonModelConfig('completion'), includeUsage: options.includeUsage });
-    const createImageModel = (modelId: string) => new OpenAICompatibleImageModel(modelId, getCommonModelConfig('image'));
-    const createEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getCommonModelConfig('embedding'));
 
     const provider = (modelId: string) => createLanguageModel(modelId);
     provider.specificationVersion = 'v3' as const;
     provider.chatModel = createChatModel;
-
     provider.languageModel = createLanguageModel;
-    provider.imageModel = createImageModel;
-    provider.embeddingModel = createEmbeddingModel;
-    provider.completionModel = createCompletionModel;
+
+    provider.completionModel = (modelId: string) => new OpenAICompatibleCompletionLanguageModel(modelId, { ...getModelConfig('completion'), includeUsage: options.includeUsage });
+    provider.imageModel = (modelId: string) => new OpenAICompatibleImageModel(modelId, getModelConfig('image'));
+    provider.embeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getModelConfig('embedding'));
+    provider.textEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getModelConfig('embedding'));
 
     return provider as VeniceProvider;
 }

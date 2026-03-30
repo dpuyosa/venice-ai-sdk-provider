@@ -49,6 +49,7 @@ export function prepareTools({ tools, toolChoice }: { tools: LanguageModelV3Call
                     name: tool.name,
                     description: tool.description,
                     parameters: tool.inputSchema,
+                    ...(tool.strict != null ? { strict: tool.strict } : {}),
                 },
             });
         }

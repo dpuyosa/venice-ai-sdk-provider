@@ -13,7 +13,8 @@ import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
 import { prepareVeniceParameters } from './venice-prepare-parameters';
 import { convertToVeniceChatMessages } from './convert-to-venice-chat-messages';
 import { createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
-import { getResponseMetadata, mapOpenAICompatibleFinishReason } from '@ai-sdk/openai-compatible/internal';
+import { getResponseMetadata } from './get-response-metadata';
+import { mapFinishReason } from './map-finish-reason';
 import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
 
 export interface VeniceChatConfig {
@@ -129,13 +130,34 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     }
 
     private async getArgs(options: LanguageModelV3CallOptions) {
+        const warnings: Array<{ type: 'unsupported'; feature: string } | { type: 'other'; message: string }> = [];
+
+        // Parse deprecated key first (lowest precedence).
+        const deprecatedOptions = await parseProviderOptions({
+            provider: 'openai-compatible',
+            providerOptions: options.providerOptions,
+            schema: veniceLanguageModelOptionsSchema,
+        });
+
+        if (deprecatedOptions != null) {
+            warnings.push({
+                type: 'other' as const,
+                message: `The 'openai-compatible' key in providerOptions is deprecated. Use 'venice' instead.`,
+            });
+        }
+
+        // Merge: deprecated < openaiCompatible < venice (venice wins).
         const compatibleOptions = Object.assign(
-            (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
-            (await parseProviderOptions({ provider: 'openai-compatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
-            (await parseProviderOptions({ provider: 'openaiCompatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
+            deprecatedOptions ?? {},
+            (await parseProviderOptions({ provider: 'openaiCompatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
+            (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
         ) as VeniceLanguageModelOptions;
 
-        const { tools: veniceTools, toolChoice: veniceToolChoice } = prepareTools({
+        const {
+            tools: veniceTools,
+            toolChoice: veniceToolChoice,
+            toolWarnings,
+        } = prepareTools({
             tools: options.tools,
             toolChoice: options.toolChoice,
         });
@@ -193,7 +215,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                 messages: convertToVeniceChatMessages(options.prompt, this.modelId),
             },
-            warnings: [],
+            warnings: [...warnings, ...toolWarnings],
         };
     }
 
@@ -253,7 +275,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         return {
             content,
             finishReason: {
-                unified: mapOpenAICompatibleFinishReason(choice?.finish_reason) ?? 'other',
+                unified: mapFinishReason(choice?.finish_reason) ?? 'other',
                 raw: choice?.finish_reason ?? undefined,
             },
             usage: veniceUsage,
@@ -349,7 +371,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                         if (choice?.finish_reason != null) {
                             finishReason = {
-                                unified: mapOpenAICompatibleFinishReason(choice.finish_reason) ?? 'other',
+                                unified: mapFinishReason(choice.finish_reason) ?? 'other',
                                 raw: choice.finish_reason,
                             };
                         }

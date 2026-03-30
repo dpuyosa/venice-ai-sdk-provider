@@ -37,14 +37,14 @@
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "^2.0.30",
+        "@ai-sdk/openai-compatible": "^2.0.37",
         "@ai-sdk/provider": "^3.0.8",
-        "@ai-sdk/provider-utils": "^4.0.15"
+        "@ai-sdk/provider-utils": "^4.0.21"
     },
     "devDependencies": {
-        "@types/node": "^25.2.3",
+        "@types/node": "^25.5.0",
         "husky": "^9.1.7",
-        "lint-staged": "^16.2.7",
+        "lint-staged": "^16.4.0",
         "prettier": "^3.8.1",
         "tsup": "^8.5.1",
         "typescript": "^5.9.3",
