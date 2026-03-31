@@ -119,7 +119,7 @@ import { venice } from 'venice-ai-sdk-provider';
 import { generateText } from 'ai';
 
 const { text } = await generateText({
-    model: venice('qwen3-next-80b),
+    model: venice('qwen3-next-80b'),
     tools: {
         get_weather: {
             description: 'Get current weather for a location',
@@ -200,7 +200,7 @@ import { embed } from 'ai';
 import { venice } from 'venice-ai-sdk-provider';
 
 const { embedding } = await embed({
-    model: venice.textEmbeddingModel('text-embedding-bge-m3'),
+    model: venice.embeddingModel('text-embedding-bge-m3'),
     value: 'sunny day at the beach',
 });
 

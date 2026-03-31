@@ -5,7 +5,9 @@ import { convertToBase64 } from '@ai-sdk/provider-utils';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV2ProviderMetadata }) {
-    return message?.providerOptions?.venice ?? message?.providerOptions?.openaiCompatible ?? {};
+    const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
+    const venice = message?.providerOptions?.venice ?? {};
+    return { ...openaiCompatible, ...venice };
 }
 
 function extractAudioFormat(mimeType: string): 'wav' | 'mp3' | 'aiff' | 'aac' | 'ogg' | 'flac' | 'm4a' | 'pcm16' | 'pcm24' {
