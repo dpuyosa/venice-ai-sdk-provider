@@ -2,6 +2,10 @@ import { z } from 'zod/v4';
 
 export type VeniceChatModelId = string;
 
+export const reasoningEffortValues = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type ReasoningEffort = (typeof reasoningEffortValues)[number];
+
 export const veniceParametersSchema = z.object({
     enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
     enableWebScraping: z.boolean().optional(),
@@ -31,11 +35,12 @@ export const veniceLanguageModelOptionsSchema = z.object({
 
     reasoning: z
         .object({
-            effort: z.enum(['low', 'medium', 'high']),
+            effort: z.enum(reasoningEffortValues).optional(),
+            enabled: z.boolean().optional(),
         })
         .optional(),
 
-    reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    reasoningEffort: z.enum(reasoningEffortValues).optional(),
 
     stopTokenIds: z.array(z.number()).optional(),
 

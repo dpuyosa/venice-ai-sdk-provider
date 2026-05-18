@@ -37,18 +37,18 @@
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "^2.0.37",
-        "@ai-sdk/provider": "^3.0.8",
-        "@ai-sdk/provider-utils": "^4.0.21"
+        "@ai-sdk/openai-compatible": "^2.0.47",
+        "@ai-sdk/provider": "^3.0.10",
+        "@ai-sdk/provider-utils": "^4.0.27"
     },
     "devDependencies": {
-        "@types/node": "^25.5.0",
+        "@types/node": "^25.8.0",
         "husky": "^9.1.7",
         "lint-staged": "^16.4.0",
-        "prettier": "^3.8.1",
+        "prettier": "^3.8.3",
         "tsup": "^8.5.1",
         "typescript": "^5.9.3",
-        "zod": "^4.3.6"
+        "zod": "^4.4.3"
     },
     "peerDependencies": {
         "ai": "^6.0.90"

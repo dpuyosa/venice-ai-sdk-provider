@@ -91,6 +91,18 @@ function isThinkingModel(modelId: string) {
     return ['qwen3-4b'].includes(modelId);
 }
 
+function buildReasoningArg(options: VeniceLanguageModelOptions): Record<string, unknown> | undefined {
+    const effort = options.reasoningEffort ?? options.reasoning?.effort;
+    const enabled = options.reasoning?.enabled;
+
+    if (effort == null && enabled == null) return undefined;
+
+    const reasoning: Record<string, unknown> = {};
+    if (effort != null) reasoning.effort = effort;
+    if (enabled != null) reasoning.enabled = enabled;
+    return reasoning;
+}
+
 export class VeniceChatLanguageModel implements LanguageModelV3 {
     readonly specificationVersion = 'v3';
     readonly modelId: string;
@@ -190,8 +202,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 logprobs: compatibleOptions.logprobs,
                 top_logprobs: compatibleOptions.topLogprobs,
 
-                reasoning: undefined,
-                reasoning_effort: compatibleOptions.reasoningEffort ?? compatibleOptions.reasoning?.effort,
+                reasoning: buildReasoningArg(compatibleOptions),
+                reasoning_effort: undefined,
                 prompt_cache_key: compatibleOptions.promptCacheKey,
 
                 venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
