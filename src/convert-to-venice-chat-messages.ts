@@ -33,10 +33,6 @@ function isGeminiModel(modelId: string): boolean {
     return modelId.toLowerCase().includes('gemini');
 }
 
-function isGptModel(modelId: string): boolean {
-    return modelId.toLowerCase().includes('gpt');
-}
-
 function createImageContentPart(mediaType: string, data: LanguageModelV2DataContent, partMetadata?: object): VeniceContentPartImage & object {
     const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
     return {
@@ -149,6 +145,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
 
             case 'assistant': {
                 let assistantText = '';
+                let reasoning = '';
                 let assistantMetadata = {};
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
@@ -157,6 +154,10 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                     switch (part.type) {
                         case 'text': {
                             assistantText += part.text;
+                            break;
+                        }
+                        case 'reasoning': {
+                            reasoning += part.text;
                             break;
                         }
                         case 'tool-call': {
@@ -179,6 +180,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV2Prompt, model
                 messages.push({
                     role: 'assistant',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+                    reasoning_content: reasoning.length > 0 ? reasoning : undefined,
                     content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
                     ...getVeniceMetadata({ providerOptions }),
                 });
