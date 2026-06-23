@@ -94,12 +94,14 @@ function isThinkingModel(modelId: string) {
 function buildReasoningArg(options: VeniceLanguageModelOptions): Record<string, unknown> | undefined {
     const effort = options.reasoningEffort ?? options.reasoning?.effort;
     const enabled = options.reasoning?.enabled;
+    const summary = options.reasoning?.summary;
 
-    if (effort == null && enabled == null) return undefined;
+    if (effort == null && enabled == null && summary == null) return undefined;
 
     const reasoning: Record<string, unknown> = {};
     if (effort != null) reasoning.effort = effort;
     if (enabled != null) reasoning.enabled = enabled;
+    if (summary != null) reasoning.summary = summary;
     return reasoning;
 }
 
@@ -205,6 +207,9 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                 reasoning: buildReasoningArg(compatibleOptions),
                 reasoning_effort: undefined,
                 prompt_cache_key: compatibleOptions.promptCacheKey,
+                prompt_cache_retention: compatibleOptions.promptCacheRetention,
+
+                parallel_tool_calls: compatibleOptions.parallelToolCalls,
 
                 venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
                 response_format:
@@ -280,8 +285,13 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         }
 
         const veniceUsage = convertVeniceChatUsage(responseBody.usage);
+        const reasoningDetails = choice?.message.reasoning_details;
         const providerMetadata: SharedV3ProviderMetadata = {
-            [providerOptionsName]: veniceUsage ? { usage: veniceUsage } : {},
+            [providerOptionsName]: {
+                ...(veniceUsage ? { usage: veniceUsage } : {}),
+                ...(reasoningDetails != null && reasoningDetails.length > 0 ? { reasoningDetails } : {}),
+                ...(responseBody.cost != null ? { cost: responseBody.cost } : {}),
+            },
         } as SharedV3ProviderMetadata;
 
         return {

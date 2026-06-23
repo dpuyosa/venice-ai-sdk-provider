@@ -11,6 +11,11 @@ const veniceTokenUsageSchema = z
                 cache_creation_input_tokens: z.number().nullish(),
             })
             .nullish(),
+        completion_tokens_details: z
+            .object({
+                reasoning_tokens: z.number().nullish(),
+            })
+            .nullish(),
     })
     .nullish();
 export type VeniceTokenUsage = z.infer<typeof veniceTokenUsageSchema>;
@@ -27,6 +32,7 @@ export const VeniceChatResponseSchema = z.looseObject({
             index: z.number().nullish(),
             message: z.object({
                 role: z.literal('assistant').nullish(),
+                name: z.string().nullish(),
                 content: z.string().nullish(),
                 refusal: z.string().nullish(),
                 annotations: z.array(z.any()).nullish(),
@@ -54,10 +60,22 @@ export const VeniceChatResponseSchema = z.looseObject({
                     .nullish(),
                 reasoning_content: z.string().nullish(),
                 reasoning: z.string().nullish(),
+                reasoning_details: z
+                    .array(
+                        z.object({
+                            type: z.string(),
+                            id: z.string().nullish(),
+                            format: z.string().nullish(),
+                            index: z.number().nullish(),
+                            text: z.string().nullish(),
+                            data: z.string().nullish(),
+                        })
+                    )
+                    .nullish(),
             }),
             logprobs: z.any().nullish(),
             finish_reason: z.string().nullish(),
-            stop_reason: z.number().nullish(),
+            stop_reason: z.string().nullish(),
             token_ids: z.array(z.number()).nullish(),
         })
     ),
@@ -65,6 +83,12 @@ export const VeniceChatResponseSchema = z.looseObject({
     prompt_logprobs: z.any().nullish(),
     prompt_token_ids: z.array(z.number()).nullish(),
     kv_transfer_params: z.any().nullish(),
+    cost: z
+        .object({
+            diem: z.number(),
+            usd: z.number(),
+        })
+        .nullish(),
     venice_parameters: z
         .object({
             strip_thinking_response: z.boolean().nullish(),
@@ -72,9 +96,19 @@ export const VeniceChatResponseSchema = z.looseObject({
             enable_web_search: z.string().nullish(),
             enable_web_scraping: z.boolean().nullish(),
             enable_web_citations: z.boolean().nullish(),
+            enable_e2ee: z.boolean().nullish(),
             include_search_results_in_stream: z.boolean().nullish(),
             include_venice_system_prompt: z.boolean().nullish(),
-            web_search_citations: z.array(z.any()).nullish(),
+            web_search_citations: z
+                .array(
+                    z.object({
+                        title: z.string(),
+                        url: z.string(),
+                        content: z.string().nullish(),
+                        date: z.string().nullish(),
+                    })
+                )
+                .nullish(),
             return_search_results_as_documents: z.boolean().nullish(),
         })
         .nullish(),

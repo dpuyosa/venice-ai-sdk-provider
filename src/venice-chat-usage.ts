@@ -21,6 +21,8 @@ export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): Veni
         };
     }
 
+    const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? undefined;
+
     return {
         inputTokens: {
             total: usage.total_tokens ?? undefined,
@@ -30,8 +32,8 @@ export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): Veni
         },
         outputTokens: {
             total: usage.completion_tokens ?? undefined,
-            text: undefined,
-            reasoning: undefined,
+            text: reasoningTokens != null && usage.completion_tokens != null ? usage.completion_tokens - reasoningTokens : undefined,
+            reasoning: reasoningTokens,
         },
         raw: usage,
     };

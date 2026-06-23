@@ -6,10 +6,20 @@ export const reasoningEffortValues = ['none', 'minimal', 'low', 'medium', 'high'
 
 export type ReasoningEffort = (typeof reasoningEffortValues)[number];
 
+export const reasoningSummaryValues = ['auto', 'concise', 'detailed'] as const;
+
+export type ReasoningSummary = (typeof reasoningSummaryValues)[number];
+
+export const promptCacheRetentionValues = ['default', 'extended', '24h'] as const;
+
+export type PromptCacheRetention = (typeof promptCacheRetentionValues)[number];
+
 export const veniceParametersSchema = z.object({
     enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
     enableWebScraping: z.boolean().optional(),
     enableWebCitations: z.boolean().optional(),
+    enableE2ee: z.boolean().optional(),
+    enableXSearch: z.boolean().optional(),
     stripThinkingResponse: z.boolean().optional(),
     disableThinking: z.boolean().optional(),
     includeVeniceSystemPrompt: z.boolean().default(false),
@@ -21,22 +31,25 @@ export const veniceParametersSchema = z.object({
 export const veniceLanguageModelOptionsSchema = z.object({
     veniceParameters: veniceParametersSchema.default({ includeVeniceSystemPrompt: false }),
 
-    topLogprobs: z.int().positive().optional(),
+    topLogprobs: z.int().min(0).optional(),
 
-    maxCompletionTokens: z.int().positive().optional(),
+    maxCompletionTokens: z.int().min(0).optional(),
 
-    maxTokens: z.int().positive().optional(),
+    maxTokens: z.int().min(0).optional(),
 
-    minP: z.int().positive().max(1).optional(),
+    minP: z.number().min(0).max(1).optional(),
 
     promptCacheKey: z.string().optional(),
 
-    repetitionPenalty: z.int().positive().optional(),
+    promptCacheRetention: z.enum(promptCacheRetentionValues).optional(),
+
+    repetitionPenalty: z.number().min(0).optional(),
 
     reasoning: z
         .object({
             effort: z.enum(reasoningEffortValues).optional(),
             enabled: z.boolean().optional(),
+            summary: z.enum(reasoningSummaryValues).optional(),
         })
         .optional(),
 

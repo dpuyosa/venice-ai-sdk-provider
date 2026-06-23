@@ -30,10 +30,21 @@ export interface VeniceUserMessage extends JsonRecord<VeniceUserMessageContentPa
     content: string | Array<VeniceUserMessageContentPart>;
 }
 
+export type VeniceReasoningDetail = {
+    type: string;
+    id?: string;
+    format?: string;
+    index?: number;
+    text?: string;
+    data?: string;
+};
+
 export interface VeniceAssistantMessage extends JsonRecord<VeniceContentPartText | VeniceMessageToolCall> {
     role: 'assistant';
+    name?: string;
     tool_calls?: Array<VeniceMessageToolCall>;
     reasoning_content?: string;
+    reasoning_details?: Array<VeniceReasoningDetail>;
     content: string | Array<VeniceContentPartText>;
 }
 
