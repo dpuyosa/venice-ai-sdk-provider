@@ -1,160 +1,90 @@
 # Agent Instructions (Venice AI SDK Provider)
 
-These instructions apply to the entire repository.
-Follow them for all agentic edits and reviews.
+Apply to every edit in this repository.
 
 ## Quick Facts
 
-- Package: `venice-ai-sdk-provider` (TypeScript).
-- Build tool: `tsup` (CJS + ESM + d.ts).
-- Formatting: `prettier` (see `.prettierrc`).
-- Type checking: `tsc` strict mode.
-- Node version: `>=18` (package.json).
+- Package: `venice-ai-sdk-provider` (TypeScript). Current version in `package.json`.
+- Purpose: Vercel AI SDK v6 provider for the Venice AI OpenAI-compatible API (`https://api.venice.ai/api/v1`).
+- Target SDK contract: `LanguageModelV3` / `ProviderV3` / `EmbeddingModelV3` / `ImageModelV3` from `@ai-sdk/provider@^3`. `ai` peer dep is `^6`.
+- Default branch: `v6`. `main` is older (`v5` lineage).
+- Node: `>=18` (see `engines`).
 
-## Required Commands
+## Commands
 
-Use `bun` unless the user asks otherwise.
-
-### Install
+Use `bun` unless the user says otherwise. `package-lock.json` exists alongside `bun.lock`; do not regenerate the lockfile unless asked.
 
 - `bun install`
+- `bun run build` - `tsup --tsconfig tsconfig.build.json` (CJS + ESM + `.d.ts`, sourcemaps, `dist/`).
+- `bun run dev` - `tsup --watch`.
+- `bun run type-check` - `tsc --noEmit` against `tsconfig.json`. **Only checks `src/`** (`include: ["src"]`). Tests are not type-checked here.
+- `bun run prettier-check` / `bun run prettier-fix` - prettier on `**/*.ts*` (`.prettierignore` excludes `node_modules`, `dist`, `logs`).
+- `bun run test` - `vitest`. `tests/` is currently empty; the `vitest` binary is not in `devDependencies` (it resolves transitively via Bun). Add `vitest` to `devDependencies` before adding tests.
+- `bun run clean` - `rm -rf dist` (Unix syntax; Bun handles it on Windows).
+- `bun run pack` - clean + minified tsup build + `npm pack --pack-destination=pack`.
 
-### Build
-
-- `bun run build` (tsup build, outputs `dist/`).
-- `bun run dev` (tsup watch).
-- `bun run clean` (remove `dist/`).
-- `bun run pack` (clean + build + npm pack).
-
-### Lint / Format
-
-- `bun run prettier-check` (prettier check).
-- `bun run prettier-fix` (prettier write).
-- `bun run type-check` (`tsc --noEmit`).
-
-### Tests
-
-When tests are added:
-
-- `bun run test` (run all tests).
-- `bun run test -- --watch` (watch mode).
-- By file: `bun run test -- path/to/file.test.ts`.
-- By test name: `bun run test -- -t "test name"`.
+Pre-commit hook (`.husky/pre-commit`) runs `npx lint-staged`, which runs `prettier --write` on staged `*.{ts,tsx}`.
 
 ## Project Layout
 
-- Source: `src/` (library entry is `src/index.ts`).
-- Tests: `tests/` (co-located with source pattern).
-- Build config: `tsup.config.ts`.
-- TS config: `tsconfig.json`.
-- Formatting config: `.prettierrc`.
+- Source: `src/`. Library entry: `src/index.ts` (re-exports `createVenice`, `venice`, `VeniceProvider`, `VeniceProviderSettings`, `VeniceLanguageModelOptions`, `VERSION`). New public exports must be added here.
+- Key modules:
+  - `venice-provider.ts` - `createVenice()`, env/header setup, default `venice` instance. Reads `VENICE_API_KEY`.
+  - `venice-chat-language-model.ts` - chat completions (`doGenerate`, `doStream`). Owns Venice-specific streaming quirks (`<think>` mocking for `qwen3-4b`, reasoning-end-before-text, `extra_content.google.thought_signature` passthrough).
+  - `venice-prepare-tools.ts` - tool/toolChoice mapping for the OpenAI-compatible wire format.
+  - `convert-to-venice-chat-messages.ts` - prompt → Venice chat messages (handles Claude content-array forcing, multimodal conversion for image/audio/video files).
+  - `venice-chat-options.ts` - Zod schemas for `veniceParameters` and `veniceLanguageModelOptions`.
+  - `venice-prepare-parameters.ts` - camelCase → snake_case for `venice_parameters`.
+  - `venice-response.ts` - response and SSE chunk Zod schemas (`z.looseObject`).
+  - `venice-chat-usage.ts` - raw usage → `LanguageModelV3Usage` (nested `inputTokens`/`outputTokens`/`raw`).
+  - `venice-error.ts`, `map-finish-reason.ts`, `get-response-metadata.ts`, `version.ts`.
+- Tests: `tests/` (empty).
+- Build outputs (do not edit): `dist/`, `pack/`.
+- Other: `.husky/`, `.npmrc`, `logs/` (debug artifacts - gitignored).
 
-## Code Style
+## Conventions That Differ From Defaults
 
-Follow the existing patterns in nearby files first.
-Prefer small, focused changes that preserve behavior.
+- Zod v4 via subpath imports: `import { z } from 'zod/v4'` (NOT `zod`). Use v4 APIs: `z.int()`, `z.looseObject()`, `z.union()`, etc. `zod` is in `devDependencies` at `^4`.
+- `tsconfig.json` is strict (`noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `isolatedModules`, `forceConsistentCasingInFileNames`). Do not relax these. `verbatimModuleSyntax` means type-only imports must use `import type`.
+- Prettier: 4-space indent, single quotes, trailing commas (`es5`), bracket spacing, `printWidth: 230`.
+- All exported functions must have explicit return types (project-wide rule). Locals may infer.
+- New public surface must be added to `src/index.ts`. Internal modules use kebab-case file names; functions/vars are `camelCase`; types/classes `PascalCase`; constants `UPPER_SNAKE_CASE`.
+- Prefer `type` aliases for union/structural shapes; `interface` for extendable object contracts. Avoid `any` - use `unknown` and narrow. Use `readonly` and `as const` where appropriate.
+- Errors: throw `Error` with clear messages; include `cause` when rethrowing. Catch only to add context. Validate external input with Zod (v4).
+- Async: `async`/`await`; no unhandled promises.
 
-### Formatting (Prettier)
+## Vercel AI SDK v6 Wiring (gotchas)
 
-- 4 spaces indentation (tabWidth: 4).
-- Semicolons required.
-- Single quotes for strings.
-- Trailing commas where valid (es5).
-- Bracket spacing enabled.
-- Max line width 230.
+- `VeniceChatLanguageModel` declares `specificationVersion = 'v3'`. The provider object also sets `provider.specificationVersion = 'v3'` (see `venice-provider.ts:103`). Keep these in sync.
+- `doStream` must emit a `{ type: 'stream-start', warnings }` event as the first chunk (see `venice-chat-language-model.ts:345`). V3 requires it.
+- `finishReason` is `{ unified, raw }` (not a string). Errors emit `{ unified: 'error', raw: undefined }`.
+- `usage` uses the nested V3 shape: `inputTokens.{total,noCache,cacheRead,cacheWrite}` and `outputTokens.{total,text,reasoning}`, plus `raw`. The flat `LanguageModelV2Usage` is gone.
+- Tool warnings use `SharedV3Warning` with `{ type: 'unsupported', feature }`; the V2 `{ type: 'unsupported-tool', tool }` is invalid. In `prepareTools`, check `tool.type === 'provider'` (NOT `'provider-defined'`).
+- Provider options keys: prefer `venice`. The deprecated `openai-compatible` key is still parsed and emits a `'other'` warning; `openaiCompatible` is the transitional alias. Merge order in `getArgs`: deprecated < `openaiCompatible` < `venice`.
+- Before any text or tool-call stream chunk, close the active reasoning block (`reasoning-end`).
+- `qwen3-4b` has special handling: it doesn't emit native `reasoning_content`, so `<think>…</think>` tags in text are parsed and re-emitted as reasoning segments (`isThinkingModel`).
 
-### Imports
+## Build / Packaging Notes
 
-- Use ES module `import`/`export` syntax.
-- Group imports: built-ins, external, then local.
-- Keep import paths explicit and relative unless a package export exists.
-- Avoid unused imports.
-- Favor named exports for library surface.
+- `tsup` externalizes `@ai-sdk/provider`, `@ai-sdk/provider-utils`, `@ai-sdk/openai-compatible` (declared in `tsup.config.ts`). Keep them external so consumers resolve them.
+- `tsup` injects `__PACKAGE_VERSION__` from `package.json` at build time. `src/version.ts` falls back to `'0.0.0-test'` when the define is absent (e.g. raw `tsc`).
+- `bun run pack` produces a minified `.tgz` in `pack/`. Do not hand-edit anything in `dist/` or `pack/`.
+- Bump version in `package.json` when shipping; remember `bun.lock` may need regenerating if deps change (only if asked).
 
-### Types & Interfaces
-
-- TypeScript is `strict`; do not loosen strictness.
-- Avoid `any`; use `unknown` + narrowing.
-- Prefer `type` aliases for unions and public API shapes.
-- Use `interface` for extendable object contracts.
-- Add explicit return types for exported functions.
-- Let locals infer types unless clarity demands explicit types.
-- Use `readonly` for immutable arrays/objects when appropriate.
-- Use `as const` for literal config objects.
-
-### Naming
-
-- `camelCase` for variables/functions.
-- `PascalCase` for types, interfaces, classes.
-- `UPPER_SNAKE_CASE` for constants.
-- File names: `kebab-case` for files, `camelCase` for implementation.
-- Prefix internal helpers with `_` only when required.
-
-### Error Handling
-
-- Throw `Error` (or custom subclasses) with clear messages.
-- Include `cause` when rethrowing (`new Error(msg, { cause })`).
-- Catch only to add context or transform errors.
-- Never swallow exceptions silently.
-- Validate external inputs (prefer `zod` if available).
-
-### Async / Promise
-
-- Prefer `async`/`await` over raw `.then` chains.
-- Avoid unhandled promises; always `await` or return.
-- Keep async functions side-effect aware.
-
-### API / Public Surface
-
-- Keep public exports stable and minimal.
-- Ensure new exports are reflected in `src/index.ts`.
-- Avoid breaking changes unless requested.
-
-### Tests
-
-- Use `vitest` style (`describe`, `it`, `expect`).
-- Co-locate tests in `tests/` to match `tsconfig` include.
-- Prefer deterministic tests; avoid real network calls.
-- Mock external calls with `@ai-sdk/test-server` where relevant.
-
-### Build & Packaging
-
-- `tsup` outputs CJS/ESM and `.d.ts`.
-- Keep `__PACKAGE_VERSION__` define in sync (tsup config reads package.json).
-- Do not write to `dist/` manually.
-
-## Repository Hygiene
-
-- Do not edit `dist/` or lockfiles unless requested.
-- Keep `.gitignore` patterns intact.
-- Avoid adding new top-level config files without approval.
-- Do not add docs files unless asked.
-
-## Notes on External Rules
-
-- No `.cursorrules` or `.cursor/rules/` found.
-- No `.github/copilot-instructions.md` found.
-- If any are added later, follow them first.
-
-## Suggested Review Checklist
+## Review Checklist (before declaring done)
 
 - `bun run prettier-check` passes.
-- `bun run type-check` passes.
-- Relevant `bun run test` command passes (when tests exist).
-- No unused exports/imports.
-- Public API changes are intentional.
+- `bun run type-check` passes (this only covers `src/`).
+- If tests exist: `bun run test` passes.
+- No unused imports/exports; new public exports added to `src/index.ts`.
+- Public API surface unchanged unless the user asked for a breaking change.
+- No edits to `dist/`, `pack/`, `logs/`, `bun.lock`, `package-lock.json` unless explicitly requested.
 
 ## Agent Behavior
 
-- Be concise and safe; ask before large refactors.
-- Keep edits minimal and aligned with existing style.
-- Prefer editing existing files over creating new ones.
-- Do not commit changes unless asked.
-- Do not remove TODOs or comments without instruction.
+- Be concise; ask before large refactors.
+- Prefer editing existing files; do not add top-level config or docs files without approval.
+- Do not commit, push, or open PRs unless explicitly asked.
+- Do not strip TODOs or existing comments without instruction.
+- Follow patterns already in `src/` rather than inventing new ones.
 
-## Contact / Ownership
-
-- Repository owner: Venice AI SDK provider maintainers.
-- If unclear, ask the user for guidance.
-
-End of instructions.
