@@ -141,6 +141,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
 
             case 'assistant': {
                 let assistantText = '';
+                let reasoningText = '';
                 let assistantMetadata = {};
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
@@ -149,6 +150,10 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                     switch (part.type) {
                         case 'text': {
                             assistantText += part.text;
+                            break;
+                        }
+                        case 'reasoning': {
+                            reasoningText += part.text;
                             break;
                         }
                         case 'tool-call': {
@@ -171,6 +176,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                 messages.push({
                     role: 'assistant',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+                    reasoning_content: reasoningText.length > 0 ? reasoningText : undefined,
                     content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
                     ...getVeniceMetadata({ providerOptions }),
                 });
