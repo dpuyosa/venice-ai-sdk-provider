@@ -14,6 +14,10 @@ const veniceTokenUsageSchema = z
         completion_tokens_details: z
             .object({
                 reasoning_tokens: z.number().nullish(),
+                accepted_prediction_tokens: z.number().nullish(),
+                rejected_prediction_tokens: z.number().nullish(),
+                image_tokens: z.number().nullish(),
+                audio_tokens: z.number().nullish(),
             })
             .nullish(),
     })
@@ -30,6 +34,7 @@ export const VeniceChatResponseSchema = z.looseObject({
     choices: z.array(
         z.object({
             index: z.number().nullish(),
+            native_finish_reason: z.string().nullish(),
             message: z.object({
                 role: z.literal('assistant').nullish(),
                 name: z.string().nullish(),
@@ -46,20 +51,12 @@ export const VeniceChatResponseSchema = z.looseObject({
                                 name: z.string(),
                                 arguments: z.string(),
                             }),
-                            extra_content: z
-                                .object({
-                                    google: z
-                                        .object({
-                                            thought_signature: z.string().nullish(),
-                                        })
-                                        .nullish(),
-                                })
-                                .nullish(),
                         })
                     )
                     .nullish(),
                 reasoning_content: z.string().nullish(),
                 reasoning: z.string().nullish(),
+                reasoning_encrypted: z.boolean().nullish(),
                 reasoning_details: z
                     .array(
                         z.object({
@@ -129,6 +126,19 @@ export const veniceChunkSchema = z.looseObject({
                     // providers serving `gpt-oss` set `reasoning`. See #7866
                     reasoning_content: z.string().nullish(),
                     reasoning: z.string().nullish(),
+                    reasoning_encrypted: z.boolean().nullish(),
+                    reasoning_details: z
+                        .array(
+                            z.object({
+                                type: z.string(),
+                                id: z.string().nullish(),
+                                format: z.string().nullish(),
+                                index: z.number().nullish(),
+                                text: z.string().nullish(),
+                                data: z.string().nullish(),
+                            })
+                        )
+                        .nullish(),
                     tool_calls: z
                         .array(
                             z.object({
@@ -138,22 +148,13 @@ export const veniceChunkSchema = z.looseObject({
                                     name: z.string().nullish(),
                                     arguments: z.string().nullish(),
                                 }),
-                                // Support for Google Gemini thought signatures via OpenAI compatibility
-                                extra_content: z
-                                    .object({
-                                        google: z
-                                            .object({
-                                                thought_signature: z.string().nullish(),
-                                            })
-                                            .nullish(),
-                                    })
-                                    .nullish(),
                             })
                         )
                         .nullish(),
                 })
                 .nullish(),
             finish_reason: z.string().nullish(),
+            native_finish_reason: z.string().nullish(),
         })
     ),
     usage: veniceTokenUsageSchema,

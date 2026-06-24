@@ -5,6 +5,7 @@ import { VERSION } from './version';
 import { VeniceChatLanguageModel } from './venice-chat-language-model';
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from '@ai-sdk/provider-utils';
 import { OpenAICompatibleCompletionLanguageModel, OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
+import { createVeniceMetadataExtractor } from './venice-metadata-extractor';
 
 export interface VeniceProviderSettings {
     /**
@@ -95,6 +96,7 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
             ...getModelConfig('chat'),
             includeUsage: options.includeUsage,
             supportsStructuredOutputs: options.supportsStructuredOutputs,
+            metadataExtractor: createVeniceMetadataExtractor(providerName),
         });
 
     const createLanguageModel = (modelId: string) => createChatModel(modelId);

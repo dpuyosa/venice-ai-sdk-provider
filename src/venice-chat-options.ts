@@ -69,6 +69,8 @@ export const veniceLanguageModelOptionsSchema = z.object({
 
     structuredOutputs: z.boolean().optional(),
 
+    strictJsonSchema: z.boolean().optional(),
+
     parallelToolCalls: z.boolean().optional(),
 
     logprobs: z.boolean().optional(),

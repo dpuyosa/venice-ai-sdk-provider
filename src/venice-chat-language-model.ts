@@ -3,7 +3,18 @@ import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
 import type { ProviderErrorStructure } from '@ai-sdk/openai-compatible';
 import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
-import type { APICallError, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3Content, LanguageModelV3FinishReason, LanguageModelV3StreamPart, SharedV3ProviderMetadata } from '@ai-sdk/provider';
+import type { MetadataExtractor } from './venice-metadata-extractor';
+import type {
+    APICallError,
+    JSONObject,
+    LanguageModelV3,
+    LanguageModelV3CallOptions,
+    LanguageModelV3Content,
+    LanguageModelV3FinishReason,
+    LanguageModelV3StreamPart,
+    SharedV3ProviderMetadata,
+    SharedV3Warning,
+} from '@ai-sdk/provider';
 
 import { prepareTools } from './venice-prepare-tools';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
@@ -26,6 +37,7 @@ export interface VeniceChatConfig {
     errorStructure?: ProviderErrorStructure<any>;
     supportsStructuredOutputs?: boolean;
     supportedUrls?: () => LanguageModelV3['supportedUrls'];
+    metadataExtractor?: MetadataExtractor;
 }
 
 function mockReasoningChunk(isMocking: boolean, delta: any) {
@@ -144,7 +156,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     }
 
     private async getArgs(options: LanguageModelV3CallOptions) {
-        const warnings: Array<{ type: 'unsupported'; feature: string } | { type: 'other'; message: string }> = [];
+        const warnings: SharedV3Warning[] = [];
 
         // Parse deprecated key first (lowest precedence).
         const deprecatedOptions = await parseProviderOptions({
@@ -160,12 +172,20 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             });
         }
 
-        // Merge: deprecated < openaiCompatible < venice (venice wins).
+        // Merge: deprecated < openaiCompatible < raw provider name
         const compatibleOptions = Object.assign(
             deprecatedOptions ?? {},
             (await parseProviderOptions({ provider: 'openaiCompatible', providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {},
             (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
         ) as VeniceLanguageModelOptions;
+
+        if (options.responseFormat?.type === 'json' && options.responseFormat.schema != null && !this.config.supportsStructuredOutputs) {
+            warnings.push({
+                type: 'unsupported' as const,
+                feature: 'responseFormat',
+                details: 'JSON response format schema is only supported with structuredOutputs',
+            });
+        }
 
         const {
             tools: veniceTools,
@@ -176,62 +196,70 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             toolChoice: options.toolChoice,
         });
 
+        const knownOptionKeys = Object.keys(veniceLanguageModelOptionsSchema.shape);
+        const rawProviderOptions = Object.entries({ ...options.providerOptions?.[this.providerOptionsName] });
+        const passthroughOptions = Object.fromEntries(rawProviderOptions.filter(([key]) => !knownOptionKeys.includes(key)));
+
+        const args = {
+            model: this.modelId,
+
+            n: compatibleOptions.n,
+            user: compatibleOptions.user,
+            max_completion_tokens: compatibleOptions.maxCompletionTokens ?? compatibleOptions.maxTokens ?? options.maxOutputTokens,
+            stream: compatibleOptions.stream,
+            stream_options: compatibleOptions.streamOptions,
+
+            stop: options.stopSequences,
+            stop_token_ids: compatibleOptions.stopTokenIds,
+            seed: options.seed,
+
+            temperature: options.temperature,
+            max_temp: compatibleOptions.maxTemp,
+            min_temp: compatibleOptions.minTemp,
+            top_p: options.topP,
+            min_p: compatibleOptions.minP,
+            top_k: options.topK,
+
+            frequency_penalty: options.frequencyPenalty,
+            presence_penalty: options.presencePenalty,
+            repetition_penalty: compatibleOptions.repetitionPenalty,
+
+            logprobs: compatibleOptions.logprobs,
+            top_logprobs: compatibleOptions.topLogprobs,
+
+            reasoning: buildReasoningArg(compatibleOptions),
+            reasoning_effort: undefined,
+            prompt_cache_key: compatibleOptions.promptCacheKey,
+            prompt_cache_retention: compatibleOptions.promptCacheRetention,
+
+            parallel_tool_calls: compatibleOptions.parallelToolCalls,
+
+            venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
+            response_format:
+                options.responseFormat?.type === 'json'
+                    ? options.responseFormat.schema != null && this.config.supportsStructuredOutputs === true
+                        ? {
+                              type: 'json_schema',
+                              json_schema: {
+                                  schema: options.responseFormat.schema,
+                                  strict: compatibleOptions.strictJsonSchema ?? true,
+                                  name: options.responseFormat.name ?? 'response',
+                                  description: options.responseFormat.description,
+                              },
+                          }
+                        : { type: 'json_object' }
+                    : undefined,
+
+            tool_choice: veniceToolChoice,
+            tools: veniceTools,
+
+            messages: convertToVeniceChatMessages(options.prompt, this.modelId),
+
+            ...passthroughOptions,
+        };
+
         return {
-            args: {
-                model: this.modelId,
-
-                n: compatibleOptions.n,
-                user: compatibleOptions.user,
-                max_completion_tokens: compatibleOptions.maxCompletionTokens ?? options.maxOutputTokens,
-                stream: compatibleOptions.stream,
-                stream_options: compatibleOptions.streamOptions,
-
-                stop: options.stopSequences,
-                stop_token_ids: compatibleOptions.stopTokenIds,
-                seed: options.seed,
-
-                temperature: options.temperature,
-                max_temp: compatibleOptions.maxTemp,
-                min_temp: compatibleOptions.minTemp,
-                top_p: options.topP,
-                min_p: compatibleOptions.minP,
-                top_k: options.topK,
-
-                frequency_penalty: options.frequencyPenalty,
-                presence_penalty: options.presencePenalty,
-                repetition_penalty: compatibleOptions.repetitionPenalty,
-
-                logprobs: compatibleOptions.logprobs,
-                top_logprobs: compatibleOptions.topLogprobs,
-
-                reasoning: buildReasoningArg(compatibleOptions),
-                reasoning_effort: undefined,
-                prompt_cache_key: compatibleOptions.promptCacheKey,
-                prompt_cache_retention: compatibleOptions.promptCacheRetention,
-
-                parallel_tool_calls: compatibleOptions.parallelToolCalls,
-
-                venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),
-                response_format:
-                    options.responseFormat?.type === 'json'
-                        ? options.responseFormat.schema != null
-                            ? {
-                                  type: 'json_schema',
-                                  json_schema: {
-                                      schema: options.responseFormat.schema,
-                                      strict: compatibleOptions.structuredOutputs ?? true,
-                                      name: options.responseFormat.name ?? 'response',
-                                      description: options.responseFormat.description,
-                                  },
-                              }
-                            : { type: 'json_object' }
-                        : undefined,
-
-                tool_choice: veniceToolChoice,
-                tools: veniceTools,
-
-                messages: convertToVeniceChatMessages(options.prompt, this.modelId),
-            },
+            args,
             warnings: [...warnings, ...toolWarnings],
         };
     }
@@ -273,26 +301,31 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
         if (choice?.message?.tool_calls) {
             for (const toolCall of choice.message.tool_calls) {
-                const thoughtSignature = toolCall.extra_content?.google?.thought_signature;
                 content.push({
                     type: 'tool-call',
                     toolCallId: toolCall.id ?? generateId(),
                     toolName: toolCall.function.name,
                     input: toolCall.function.arguments!,
-                    ...(thoughtSignature ? { providerMetadata: { [providerOptionsName]: { thoughtSignature } } } : {}),
                 });
             }
         }
 
         const veniceUsage = convertVeniceChatUsage(responseBody.usage);
-        const reasoningDetails = choice?.message.reasoning_details;
         const providerMetadata: SharedV3ProviderMetadata = {
-            [providerOptionsName]: {
-                ...(veniceUsage ? { usage: veniceUsage } : {}),
-                ...(reasoningDetails != null && reasoningDetails.length > 0 ? { reasoningDetails } : {}),
-                ...(responseBody.cost != null ? { cost: responseBody.cost } : {}),
-            },
+            [providerOptionsName]: {},
+            ...(await this.config.metadataExtractor?.extractMetadata?.({ parsedBody: rawResponse })),
         } as SharedV3ProviderMetadata;
+
+        const metadata = providerMetadata[providerOptionsName] ?? {};
+        providerMetadata[providerOptionsName] = metadata;
+
+        const completionTokenDetails = responseBody.usage?.completion_tokens_details;
+        if (completionTokenDetails?.accepted_prediction_tokens != null) {
+            metadata.acceptedPredictionTokens = completionTokenDetails.accepted_prediction_tokens;
+        }
+        if (completionTokenDetails?.rejected_prediction_tokens != null) {
+            metadata.rejectedPredictionTokens = completionTokenDetails.rejected_prediction_tokens;
+        }
 
         return {
             content,
@@ -335,11 +368,11 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             type: 'function';
             function: { name: string; arguments: string };
             hasFinished: boolean;
-            thoughtSignature?: string;
         }> = [];
 
         let finishReason: LanguageModelV3FinishReason = { unified: 'other', raw: undefined };
 
+        const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
         const providerOptionsName = this.providerOptionsName;
         const mockReasoning = isThinkingModel(this.modelId);
         let usage: VeniceTokenUsage = undefined;
@@ -347,6 +380,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         let isActiveText = false;
         let isActiveReasoning = false;
         let isMockingReasoning = false;
+        let reasoningDetails: NonNullable<NonNullable<VeniceChatResponse['choices']>[number]['message']['reasoning_details']> = [];
+        let reasoningEncrypted: boolean | undefined;
 
         return {
             stream: response.pipeThrough(
@@ -365,6 +400,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                             controller.enqueue({ type: 'error', error: chunk.error });
                             return;
                         }
+
+                        metadataExtractor?.processChunk(chunk.rawValue);
 
                         if ('error' in chunk.value) {
                             finishReason = { unified: 'error', raw: undefined };
@@ -404,6 +441,14 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                         const delta = choice.delta;
                         if (mockReasoning) isMockingReasoning = mockReasoningChunk(isMockingReasoning, delta);
+
+                        if (delta.reasoning_details != null) {
+                            reasoningDetails = [...reasoningDetails, ...delta.reasoning_details];
+                        }
+
+                        if (delta.reasoning_encrypted != null) {
+                            reasoningEncrypted = delta.reasoning_encrypted;
+                        }
 
                         const reasoningContent = delta.reasoning_content ?? delta.reasoning;
                         if (reasoningContent) {
@@ -486,7 +531,6 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                             arguments: toolCallDelta.function.arguments ?? '',
                                         },
                                         hasFinished: false,
-                                        thoughtSignature: toolCallDelta.extra_content?.google?.thought_signature ?? undefined,
                                     };
 
                                     const toolCall = toolCalls[index];
@@ -514,15 +558,6 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                                 toolCallId: toolCall.id ?? generateId(),
                                                 toolName: toolCall.function.name,
                                                 input: toolCall.function.arguments,
-                                                ...(toolCall.thoughtSignature
-                                                    ? {
-                                                          providerMetadata: {
-                                                              [providerOptionsName]: {
-                                                                  thoughtSignature: toolCall.thoughtSignature,
-                                                              },
-                                                          },
-                                                      }
-                                                    : {}),
                                             });
                                             toolCall.hasFinished = true;
                                         }
@@ -557,15 +592,6 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                         toolCallId: toolCall.id ?? generateId(),
                                         toolName: toolCall.function.name,
                                         input: toolCall.function.arguments,
-                                        ...(toolCall.thoughtSignature
-                                            ? {
-                                                  providerMetadata: {
-                                                      [providerOptionsName]: {
-                                                          thoughtSignature: toolCall.thoughtSignature,
-                                                      },
-                                                  },
-                                              }
-                                            : {}),
                                     });
                                     toolCall.hasFinished = true;
                                 }
@@ -590,21 +616,27 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                 toolCallId: toolCall.id ?? generateId(),
                                 toolName: toolCall.function.name,
                                 input: toolCall.function.arguments,
-                                ...(toolCall.thoughtSignature
-                                    ? {
-                                          providerMetadata: {
-                                              [providerOptionsName]: {
-                                                  thoughtSignature: toolCall.thoughtSignature,
-                                              },
-                                          },
-                                      }
-                                    : {}),
                             });
+                        }
+
+                        const metadata: JSONObject = {};
+                        if (usage?.completion_tokens_details?.accepted_prediction_tokens != null) {
+                            metadata.acceptedPredictionTokens = usage.completion_tokens_details.accepted_prediction_tokens;
+                        }
+                        if (usage?.completion_tokens_details?.rejected_prediction_tokens != null) {
+                            metadata.rejectedPredictionTokens = usage.completion_tokens_details.rejected_prediction_tokens;
+                        }
+                        if (reasoningDetails.length > 0) {
+                            metadata.reasoningDetails = reasoningDetails;
+                        }
+                        if (reasoningEncrypted != null) {
+                            metadata.reasoningEncrypted = reasoningEncrypted;
                         }
 
                         const veniceUsage = convertVeniceChatUsage(usage);
                         const providerMetadata: SharedV3ProviderMetadata = {
-                            [providerOptionsName]: veniceUsage ? { usage: veniceUsage } : {},
+                            [providerOptionsName]: metadata,
+                            ...metadataExtractor?.buildMetadata(),
                         } as SharedV3ProviderMetadata;
 
                         controller.enqueue({

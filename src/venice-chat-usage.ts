@@ -21,18 +21,21 @@ export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): Veni
         };
     }
 
-    const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? undefined;
+    const promptTokens = usage.prompt_tokens ?? 0;
+    const completionTokens = usage.completion_tokens ?? 0;
+    const cacheReadTokens = usage.prompt_tokens_details?.cached_tokens ?? 0;
+    const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? 0;
 
     return {
         inputTokens: {
-            total: usage.total_tokens ?? undefined,
-            noCache: usage.prompt_tokens ?? undefined,
-            cacheRead: usage.prompt_tokens_details?.cached_tokens ?? undefined,
+            total: promptTokens,
+            noCache: promptTokens - cacheReadTokens,
+            cacheRead: cacheReadTokens,
             cacheWrite: usage.prompt_tokens_details?.cache_creation_input_tokens ?? undefined,
         },
         outputTokens: {
-            total: usage.completion_tokens ?? undefined,
-            text: reasoningTokens != null && usage.completion_tokens != null ? usage.completion_tokens - reasoningTokens : undefined,
+            total: completionTokens,
+            text: completionTokens - reasoningTokens,
             reasoning: reasoningTokens,
         },
         raw: usage,
