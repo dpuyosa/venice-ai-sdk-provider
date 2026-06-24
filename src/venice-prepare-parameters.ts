@@ -1,5 +1,5 @@
-import { z } from 'zod/v4';
-import { veniceParametersSchema } from './venice-chat-options';
+import type { z } from 'zod/v4';
+import type { veniceParametersSchema } from './venice-chat-options';
 
 /**
  * Converts camelCase string to snake_case at the type level.

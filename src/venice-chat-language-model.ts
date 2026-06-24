@@ -1,9 +1,4 @@
-import type { z } from 'zod/v4';
-import type { VeniceLanguageModelOptions } from './venice-chat-options';
-import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
 import type { ProviderErrorStructure } from '@ai-sdk/openai-compatible';
-import type { VeniceChatResponse, veniceChunkSchema, VeniceTokenUsage } from './venice-response';
-import type { MetadataExtractor } from './venice-metadata-extractor';
 import type {
     APICallError,
     JSONObject,
@@ -15,18 +10,24 @@ import type {
     SharedV3ProviderMetadata,
     SharedV3Warning,
 } from '@ai-sdk/provider';
-
-import { prepareTools } from './venice-prepare-tools';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
-import { convertVeniceChatUsage } from './venice-chat-usage';
-import { defaultVeniceErrorStructure } from './venice-error';
-import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
-import { prepareVeniceParameters } from './venice-prepare-parameters';
+import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
+import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
+import type { z } from 'zod/v4';
 import { convertToVeniceChatMessages } from './convert-to-venice-chat-messages';
-import { createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
 import { getResponseMetadata } from './get-response-metadata';
 import { mapFinishReason } from './map-finish-reason';
-import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
+import type { VeniceLanguageModelOptions } from './venice-chat-options';
+import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
+import { convertVeniceChatUsage } from './venice-chat-usage';
+import { defaultVeniceErrorStructure } from './venice-error';
+import type { MetadataExtractor } from './venice-metadata-extractor';
+import { prepareVeniceParameters } from './venice-prepare-parameters';
+import { prepareTools } from './venice-prepare-tools';
+import type { VeniceChatResponse, VeniceTokenUsage, veniceChunkSchema } from './venice-response';
+import { createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
+
+type VeniceChunkDelta = NonNullable<NonNullable<z.infer<typeof veniceChunkSchema>['choices'][number]['delta']>>;
 
 export interface VeniceChatConfig {
     provider: string;
@@ -34,15 +35,16 @@ export interface VeniceChatConfig {
     url: (options: { modelId: string; path: string }) => string;
     fetch?: FetchFunction;
     includeUsage?: boolean;
+    // biome-ignore lint/suspicious/noExplicitAny: error structures are generic over caller-provided schemas.
     errorStructure?: ProviderErrorStructure<any>;
     supportsStructuredOutputs?: boolean;
     supportedUrls?: () => LanguageModelV3['supportedUrls'];
     metadataExtractor?: MetadataExtractor;
 }
 
-function mockReasoningChunk(isMocking: boolean, delta: any) {
+function mockReasoningChunk(isMocking: boolean, delta: VeniceChunkDelta): boolean {
     if ((!isMocking && delta.content?.startsWith('<think>')) || isMocking) {
-        let mocking = delta.content?.endsWith('</think>') ? false : true;
+        const mocking = !delta.content?.endsWith('</think>');
 
         if (delta.content?.startsWith('<think>')) delta.content = delta.content?.replace('<think>', '');
         if (delta.content?.endsWith('</think>')) delta.content = delta.content?.replace('</think>', '');
@@ -305,7 +307,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                     type: 'tool-call',
                     toolCallId: toolCall.id ?? generateId(),
                     toolName: toolCall.function.name,
-                    input: toolCall.function.arguments!,
+                    input: toolCall.function.arguments,
                 });
             }
         }
@@ -375,7 +377,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
         const providerOptionsName = this.providerOptionsName;
         const mockReasoning = isThinkingModel(this.modelId);
-        let usage: VeniceTokenUsage = undefined;
+        let usage: VeniceTokenUsage;
         let isFirstChunk = true;
         let isActiveText = false;
         let isActiveReasoning = false;
@@ -571,7 +573,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                                 if (toolCall.hasFinished) continue;
 
-                                if (toolCallDelta.function?.arguments != null) toolCall.function!.arguments += toolCallDelta.function?.arguments ?? '';
+                                if (toolCallDelta.function?.arguments != null) toolCall.function.arguments += toolCallDelta.function.arguments;
 
                                 // send delta
                                 controller.enqueue({

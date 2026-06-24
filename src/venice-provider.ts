@@ -1,11 +1,10 @@
+import { OpenAICompatibleCompletionLanguageModel, OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
 import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
-
-import { VERSION } from './version';
-import { VeniceChatLanguageModel } from './venice-chat-language-model';
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from '@ai-sdk/provider-utils';
-import { OpenAICompatibleCompletionLanguageModel, OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
+import { VeniceChatLanguageModel } from './venice-chat-language-model';
 import { createVeniceMetadataExtractor } from './venice-metadata-extractor';
+import { VERSION } from './version';
 
 export interface VeniceProviderSettings {
     /**

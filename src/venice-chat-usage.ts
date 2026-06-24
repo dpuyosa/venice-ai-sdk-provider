@@ -1,5 +1,5 @@
-import type { VeniceChatResponse } from './venice-response';
 import type { LanguageModelV3Usage } from '@ai-sdk/provider';
+import type { VeniceChatResponse } from './venice-response';
 
 export interface VeniceUsage extends LanguageModelV3Usage {}
 

@@ -1,5 +1,5 @@
-import type { SharedV3ProviderMetadata } from '@ai-sdk/provider';
 import type { MetadataExtractor } from '@ai-sdk/openai-compatible';
+import type { SharedV3ProviderMetadata } from '@ai-sdk/provider';
 import type { VeniceChatResponse } from './venice-response';
 
 export type { MetadataExtractor } from '@ai-sdk/openai-compatible';

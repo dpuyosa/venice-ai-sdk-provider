@@ -1,8 +1,8 @@
-import type { VeniceChatPrompt, VeniceUserMessageContentPart, VeniceContentPartImage, VeniceContentPartVideo, VeniceContentPartAudio } from './venice-chat-message';
-import type { LanguageModelV3Prompt, SharedV3ProviderMetadata, LanguageModelV3DataContent } from '@ai-sdk/provider';
+import type { LanguageModelV3DataContent, LanguageModelV3Prompt, SharedV3ProviderMetadata } from '@ai-sdk/provider';
+import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
 import { convertToBase64 } from '@ai-sdk/provider-utils';
-import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
+import type { VeniceChatPrompt, VeniceContentPartAudio, VeniceContentPartImage, VeniceContentPartVideo, VeniceUserMessageContentPart } from './venice-chat-message';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
     const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
@@ -132,6 +132,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                                     });
                                 }
                             }
+                            default: {
+                                throw new UnsupportedFunctionalityError({
+                                    functionality: `content part type ${(part as { type: string }).type}`,
+                                });
+                            }
                         }
                     }),
                     ...getVeniceMetadata({ providerOptions }),
@@ -142,7 +147,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
             case 'assistant': {
                 let assistantText = '';
                 let reasoningText = '';
-                let assistantMetadata = {};
+                const assistantMetadata = {};
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
 
                 for (const part of content) {
@@ -240,8 +245,9 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                             }
 
                             // Apply partMetadata to last media part of this tool result
-                            if (mediaParts.length > 0) {
-                                Object.assign(mediaParts.at(-1)!, partMetadata);
+                            const lastMediaPart = mediaParts.at(-1);
+                            if (lastMediaPart != null) {
+                                Object.assign(lastMediaPart, partMetadata);
                                 mediaUserContent.push(...mediaParts);
 
                                 // Emit a tool message with text-only content for compatibility

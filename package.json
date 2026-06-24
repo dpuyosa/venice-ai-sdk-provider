@@ -17,15 +17,15 @@
         "clean": "rm -rf dist",
         "dev": "tsup --watch",
         "pack": "rm -rf dist && mkdir -p pack && tsup --minify --tsconfig tsconfig.build.json && npm pack --pack-destination=pack",
-        "type-check": "tsc --noEmit",
-        "prettier-check": "prettier --check \"./**/*.ts*\"",
-        "prettier-fix": "prettier --write \"./**/*.ts*\"",
-        "test": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "biome check",
+        "lint:fix": "biome check --write",
+        "format": "biome format --write",
         "prepare": "husky"
     },
     "lint-staged": {
-        "*.{ts,tsx}": [
-            "prettier --write"
+        "*.{ts,tsx,json}": [
+            "biome check --write --no-errors-on-unmatched"
         ]
     },
     "exports": {
@@ -42,10 +42,10 @@
         "@ai-sdk/provider-utils": "^4.0.30"
     },
     "devDependencies": {
+        "@biomejs/biome": "^2.5.1",
         "@types/node": "^26.0.0",
         "husky": "^9.1.7",
         "lint-staged": "^17.0.8",
-        "prettier": "^3.8.4",
         "tsup": "^8.5.1",
         "typescript": "^5.9.3",
         "zod": "^4.4.3"
