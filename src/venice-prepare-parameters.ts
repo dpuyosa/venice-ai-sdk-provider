@@ -1,5 +1,5 @@
 import type { z } from 'zod/v4';
-import type { veniceParametersSchema } from './venice-chat-options';
+import { veniceParametersSchema } from './venice-chat-options';
 
 /**
  * Converts camelCase string to snake_case at the type level.
@@ -35,13 +35,10 @@ function toSnakeCase(str: string): string {
 }
 
 export function prepareVeniceParameters({ veniceParameters }: { veniceParameters: VeniceParametersInput | undefined }): VeniceParametersOutput | undefined {
-    if (veniceParameters == null) {
-        return undefined;
-    }
-
     const result: Record<string, unknown> = {};
 
-    for (const [key, value] of Object.entries(veniceParameters)) {
+    const source = veniceParameters ?? veniceParametersSchema.parse({});
+    for (const [key, value] of Object.entries(source)) {
         if (value !== undefined) {
             result[toSnakeCase(key)] = value;
         }
