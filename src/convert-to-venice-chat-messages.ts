@@ -2,7 +2,7 @@ import type { LanguageModelV3DataContent, LanguageModelV3Prompt, SharedV3Provide
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
 import { convertToBase64 } from '@ai-sdk/provider-utils';
-import type { VeniceChatPrompt, VeniceContentPartAudio, VeniceContentPartImage, VeniceContentPartVideo, VeniceUserMessageContentPart } from './venice-chat-message';
+import type { VeniceChatPrompt, VeniceContentPartAudio, VeniceContentPartFile, VeniceContentPartImage, VeniceContentPartVideo, VeniceUserMessageContentPart } from './venice-chat-message';
 
 function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
     const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
@@ -31,6 +31,9 @@ function isClaudeModel(modelId: string): boolean {
 
 function createImageContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartImage & object {
     const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
+    if (data instanceof URL && data.protocol !== 'http:' && data.protocol !== 'https:') {
+        throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${data.protocol}` });
+    }
     return {
         type: 'image_url',
         image_url: {
@@ -48,6 +51,9 @@ function createVideoContentPart(mediaType: string, data: LanguageModelV3DataCont
         throw new UnsupportedFunctionalityError({
             functionality: `Unsupported video format: ${mediaType}`,
         });
+    }
+    if (data instanceof URL && data.protocol !== 'http:' && data.protocol !== 'https:') {
+        throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${data.protocol}` });
     }
 
     return {
@@ -75,11 +81,19 @@ function createAudioContentPart(mediaType: string, data: LanguageModelV3DataCont
     };
 }
 
-function createTextContentPart(_mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceUserMessageContentPart & object {
-    const textContent = data instanceof URL ? data.toString() : typeof data === 'string' ? data : new TextDecoder().decode(data);
+function createFileContentPart(mediaType: string, data: LanguageModelV3DataContent, filename?: string, partMetadata?: object): VeniceContentPartFile & object {
+    let fileData: string;
+    if (data instanceof URL) {
+        if (data.protocol !== 'http:' && data.protocol !== 'https:') {
+            throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${data.protocol}` });
+        }
+        fileData = data.toString();
+    } else {
+        fileData = `data:${mediaType};base64,${convertToBase64(data)}`;
+    }
     return {
-        type: 'text',
-        text: textContent,
+        type: 'file',
+        file: { file_data: fileData, ...(filename == null ? {} : { filename }) },
         ...partMetadata,
     };
 }
@@ -124,12 +138,8 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                                     return createAudioContentPart(part.mediaType, part.data, partMetadata);
                                 } else if (part.mediaType.startsWith('video/')) {
                                     return createVideoContentPart(part.mediaType, part.data, partMetadata);
-                                } else if (part.mediaType.startsWith('text/')) {
-                                    return createTextContentPart(part.mediaType, part.data, partMetadata);
                                 } else {
-                                    throw new UnsupportedFunctionalityError({
-                                        functionality: `file part media type ${part.mediaType}`,
-                                    });
+                                    return createFileContentPart(part.mediaType, part.data, part.filename, partMetadata);
                                 }
                             }
                             default: {
@@ -171,6 +181,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                                 },
                             });
                             break;
+                        }
+                        case 'file': {
+                            throw new UnsupportedFunctionalityError({
+                                functionality: 'assistant file content',
+                            });
                         }
                     }
                 }
@@ -229,18 +244,18 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                                         mediaParts.push(createVideoContentPart(part.mediaType, part.data));
                                     } else if (part.mediaType?.startsWith('audio/')) {
                                         mediaParts.push(createAudioContentPart(part.mediaType, part.data));
-                                    } else
-                                        throw new UnsupportedFunctionalityError({
-                                            functionality: `file part media type ${part.mediaType}`,
-                                        });
+                                    } else {
+                                        mediaParts.push(createFileContentPart(part.mediaType, part.data, part.filename, getVeniceMetadata(part)));
+                                    }
                                 } else if (part.type === 'file-url') {
                                     const url = new URL(part.url);
-                                    if (url.pathname.match(/\.(mp4|mpeg|mov|webm)$/i)) {
+                                    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                                        throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${url.protocol}` });
+                                    } else if (url.pathname.match(/\.(mp4|mpeg|mov|webm)$/i)) {
                                         mediaParts.push(createVideoContentPart('video/*', url));
-                                    } else
-                                        throw new UnsupportedFunctionalityError({
-                                            functionality: `file part media ${part.url}`,
-                                        });
+                                    } else {
+                                        mediaParts.push(createFileContentPart('application/octet-stream', url, undefined, getVeniceMetadata(part)));
+                                    }
                                 }
                             }
 

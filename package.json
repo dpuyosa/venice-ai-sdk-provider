@@ -17,6 +17,7 @@
         "clean": "rm -rf dist",
         "dev": "tsup --watch",
         "pack": "rm -rf dist && mkdir -p pack && tsup --minify --tsconfig tsconfig.build.json && npm pack --pack-destination=pack",
+        "test": "vitest run",
         "typecheck": "tsc --noEmit",
         "lint": "biome check",
         "lint:fix": "biome check --write",
@@ -37,17 +38,18 @@
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "^2.0.51",
-        "@ai-sdk/provider": "^3.0.10",
-        "@ai-sdk/provider-utils": "^4.0.30"
+        "@ai-sdk/openai-compatible": "^2.0.59",
+        "@ai-sdk/provider": "^3.0.14",
+        "@ai-sdk/provider-utils": "^4.0.38"
     },
     "devDependencies": {
-        "@biomejs/biome": "^2.5.1",
-        "@types/node": "^26.0.0",
+        "@biomejs/biome": "^2.5.3",
+        "@types/node": "^26.1.1",
         "husky": "^9.1.7",
         "lint-staged": "^17.0.8",
         "tsup": "^8.5.1",
         "typescript": "^5.9.3",
+        "vitest": "^3.2.4",
         "zod": "^4.4.3"
     },
     "peerDependencies": {

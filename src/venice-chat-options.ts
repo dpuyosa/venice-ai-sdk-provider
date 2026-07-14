@@ -79,7 +79,7 @@ export const veniceLanguageModelOptionsSchema = z.object({
 
     minTemp: z.number().min(0).max(2).optional(),
 
-    n: z.int().min(1).default(1),
+    n: z.int().min(1).optional(),
 });
 
 export type VeniceLanguageModelOptions = z.infer<typeof veniceLanguageModelOptionsSchema>;

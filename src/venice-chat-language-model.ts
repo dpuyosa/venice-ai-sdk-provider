@@ -12,7 +12,7 @@ import type {
 } from '@ai-sdk/provider';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
 import type { FetchFunction, ParseResult, ResponseHandler } from '@ai-sdk/provider-utils';
-import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, isParsableJson, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
+import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, parseProviderOptions, postJsonToApi } from '@ai-sdk/provider-utils';
 import type { z } from 'zod/v4';
 import { convertToVeniceChatMessages } from './convert-to-venice-chat-messages';
 import { getResponseMetadata } from './get-response-metadata';
@@ -27,8 +27,6 @@ import { prepareTools } from './venice-prepare-tools';
 import type { VeniceChatResponse, VeniceTokenUsage, veniceChunkSchema } from './venice-response';
 import { createVeniceChatChunkSchema, VeniceChatResponseSchema } from './venice-response';
 
-type VeniceChunkDelta = NonNullable<NonNullable<z.infer<typeof veniceChunkSchema>['choices'][number]['delta']>>;
-
 export interface VeniceChatConfig {
     provider: string;
     headers: () => Record<string, string | undefined>;
@@ -40,69 +38,6 @@ export interface VeniceChatConfig {
     supportsStructuredOutputs?: boolean;
     supportedUrls?: () => LanguageModelV3['supportedUrls'];
     metadataExtractor?: MetadataExtractor;
-}
-
-function mockReasoningChunk(isMocking: boolean, delta: VeniceChunkDelta): boolean {
-    if ((!isMocking && delta.content?.startsWith('<think>')) || isMocking) {
-        const mocking = !delta.content?.endsWith('</think>');
-
-        if (delta.content?.startsWith('<think>')) delta.content = delta.content?.replace('<think>', '');
-        if (delta.content?.endsWith('</think>')) delta.content = delta.content?.replace('</think>', '');
-
-        delta.reasoning_content = delta.content;
-        delta.content = null;
-        return mocking;
-    }
-    return false;
-}
-
-function mockReasoningContent(text: string): Array<{ type: 'text' | 'reasoning'; content: string }> {
-    const result: Array<{ type: 'text' | 'reasoning'; content: string }> = [];
-    let currentIndex = 0;
-
-    while (currentIndex < text.length) {
-        const thinkStartIndex = text.indexOf('<think>', currentIndex);
-
-        // No more <think> tags found
-        if (thinkStartIndex === -1) {
-            const remainingText = text.slice(currentIndex);
-            if (remainingText.length > 0) {
-                result.push({ type: 'text', content: remainingText });
-            }
-            break;
-        }
-
-        // Add text before <think> tag
-        if (thinkStartIndex > currentIndex) {
-            const textBefore = text.slice(currentIndex, thinkStartIndex);
-            result.push({ type: 'text', content: textBefore });
-        }
-
-        // Find matching </think> tag
-        const thinkEndIndex = text.indexOf('</think>', thinkStartIndex);
-
-        if (thinkEndIndex === -1) {
-            // No closing tag found, treat rest as regular text
-            const remainingText = text.slice(thinkStartIndex);
-            result.push({ type: 'text', content: remainingText });
-            break;
-        }
-
-        // Extract reasoning content between tags
-        const reasoningContent = text.slice(thinkStartIndex + 7, thinkEndIndex); // 7 = '<think>'.length
-        if (reasoningContent.length > 0) {
-            result.push({ type: 'reasoning', content: reasoningContent });
-        }
-
-        currentIndex = thinkEndIndex + 8; // 8 = '</think>'.length
-    }
-
-    return result;
-}
-
-function isThinkingModel(modelId: string) {
-    // These models output thinking tag
-    return ['qwen3-4b'].includes(modelId);
 }
 
 function buildReasoningArg(options: VeniceLanguageModelOptions): Record<string, unknown> | undefined {
@@ -152,7 +87,14 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
     get supportedUrls() {
         return (
             this.config.supportedUrls?.() ?? {
-                'image/*': [/^data:image\/(?:jpeg|png|webp);base64,/, /^https?:\/\/.+\.(jpg|jpeg|png|webp)$/i],
+                '*/*': [/^data:/],
+                'image/*': [/^https?:\/\//],
+                'video/mp4': [/^https?:\/\//],
+                'video/mpeg': [/^https?:\/\//],
+                'video/mov': [/^https?:\/\//],
+                'video/webm': [/^https?:\/\//],
+                'application/*': [/^https?:\/\//],
+                'text/*': [/^https?:\/\//],
             }
         );
     }
@@ -181,6 +123,13 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             (await parseProviderOptions({ provider: this.providerOptionsName, providerOptions: options.providerOptions, schema: veniceLanguageModelOptionsSchema })) ?? {}
         ) as VeniceLanguageModelOptions;
 
+        if (compatibleOptions.n != null && compatibleOptions.n > 1) {
+            warnings.push({
+                type: 'other',
+                message: `The Venice API supports multiple choices, but this LanguageModelV3 adapter exposes one completion; provider option 'n' was reduced from ${compatibleOptions.n} to 1.`,
+            });
+        }
+
         if (options.responseFormat?.type === 'json' && options.responseFormat.schema != null && !this.config.supportsStructuredOutputs) {
             warnings.push({
                 type: 'unsupported' as const,
@@ -205,11 +154,11 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         const args = {
             model: this.modelId,
 
-            n: compatibleOptions.n,
+            n: compatibleOptions.n == null ? undefined : 1,
             user: compatibleOptions.user,
             max_completion_tokens: compatibleOptions.maxCompletionTokens ?? compatibleOptions.maxTokens ?? options.maxOutputTokens,
             stream: compatibleOptions.stream,
-            stream_options: compatibleOptions.streamOptions,
+            stream_options: compatibleOptions.streamOptions == null ? undefined : { include_usage: compatibleOptions.streamOptions.includeUsage },
 
             stop: options.stopSequences,
             stop_token_ids: compatibleOptions.stopTokenIds,
@@ -291,15 +240,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         const text = choice?.message.content ?? null;
         const reasoning = choice?.message.reasoning_content ?? choice?.message.reasoning ?? null;
 
-        if (!isThinkingModel(this.modelId)) {
-            if (text !== null && text.length > 0) content.push({ type: 'text', text });
-            if (reasoning != null && reasoning.length > 0) content.push({ type: 'reasoning', text: reasoning });
-        } else if (text != null && text.length > 0) {
-            const segments = mockReasoningContent(text);
-            for (const segment of segments) {
-                content.push({ type: segment.type, text: segment.content });
-            }
-        }
+        if (text !== null && text.length > 0) content.push({ type: 'text', text });
+        if (reasoning != null && reasoning.length > 0) content.push({ type: 'reasoning', text: reasoning });
 
         if (choice?.message?.tool_calls) {
             for (const toolCall of choice.message.tool_calls) {
@@ -352,7 +294,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         const body = {
             ...args,
             stream: true,
-            stream_options: this.config.includeUsage ? { includeUsage: true } : undefined,
+            stream_options: args.stream_options ?? (this.config.includeUsage ? { include_usage: true } : undefined),
         };
 
         const { responseHeaders, value: response } = await postJsonToApi({
@@ -370,18 +312,17 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             type: 'function';
             function: { name: string; arguments: string };
             hasFinished: boolean;
+            hasStarted: boolean;
         }> = [];
 
         let finishReason: LanguageModelV3FinishReason = { unified: 'other', raw: undefined };
 
         const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
         const providerOptionsName = this.providerOptionsName;
-        const mockReasoning = isThinkingModel(this.modelId);
         let usage: VeniceTokenUsage;
         let isFirstChunk = true;
         let isActiveText = false;
         let isActiveReasoning = false;
-        let isMockingReasoning = false;
         let reasoningDetails: NonNullable<NonNullable<VeniceChatResponse['choices']>[number]['message']['reasoning_details']> = [];
         let reasoningEncrypted: boolean | undefined;
 
@@ -442,7 +383,6 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                         }
 
                         const delta = choice.delta;
-                        if (mockReasoning) isMockingReasoning = mockReasoningChunk(isMockingReasoning, delta);
 
                         if (delta.reasoning_details != null) {
                             reasoningDetails = [...reasoningDetails, ...delta.reasoning_details];
@@ -512,56 +452,29 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                         });
                                     }
 
-                                    if (toolCallDelta.function?.name == null) {
-                                        throw new InvalidResponseDataError({
-                                            data: toolCallDelta,
-                                            message: `Expected 'function.name' to be a string.`,
-                                        });
-                                    }
-
-                                    controller.enqueue({
-                                        type: 'tool-input-start',
-                                        id: toolCallDelta.id,
-                                        toolName: toolCallDelta.function.name,
-                                    });
-
                                     toolCalls[index] = {
                                         id: toolCallDelta.id,
                                         type: 'function',
                                         function: {
-                                            name: toolCallDelta.function.name,
+                                            name: toolCallDelta.function?.name ?? '',
                                             arguments: toolCallDelta.function.arguments ?? '',
                                         },
                                         hasFinished: false,
+                                        hasStarted: false,
                                     };
 
                                     const toolCall = toolCalls[index];
 
-                                    if (toolCall.function?.name != null && toolCall.function?.arguments != null) {
-                                        // send delta if the argument text has already started:
+                                    if (toolCall.function.name.length > 0) {
+                                        controller.enqueue({ type: 'tool-input-start', id: toolCall.id, toolName: toolCall.function.name });
+                                        toolCall.hasStarted = true;
+
                                         if (toolCall.function.arguments.length > 0) {
                                             controller.enqueue({
                                                 type: 'tool-input-delta',
                                                 id: toolCall.id,
                                                 delta: toolCall.function.arguments,
                                             });
-                                        }
-
-                                        // check if tool call is complete
-                                        // (some providers send the full tool call in one chunk):
-                                        if (isParsableJson(toolCall.function.arguments)) {
-                                            controller.enqueue({
-                                                type: 'tool-input-end',
-                                                id: toolCall.id,
-                                            });
-
-                                            controller.enqueue({
-                                                type: 'tool-call',
-                                                toolCallId: toolCall.id ?? generateId(),
-                                                toolName: toolCall.function.name,
-                                                input: toolCall.function.arguments,
-                                            });
-                                            toolCall.hasFinished = true;
                                         }
                                     }
 
@@ -573,29 +486,30 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                                 if (toolCall.hasFinished) continue;
 
-                                if (toolCallDelta.function?.arguments != null) toolCall.function.arguments += toolCallDelta.function.arguments;
+                                if (toolCallDelta.function?.name != null && !toolCall.hasStarted) {
+                                    toolCall.function.name = toolCallDelta.function.name;
+                                    controller.enqueue({ type: 'tool-input-start', id: toolCall.id, toolName: toolCall.function.name });
+                                    toolCall.hasStarted = true;
 
-                                // send delta
-                                controller.enqueue({
-                                    type: 'tool-input-delta',
-                                    id: toolCall.id,
-                                    delta: toolCallDelta.function.arguments ?? '',
-                                });
+                                    if (toolCall.function.arguments.length > 0) {
+                                        controller.enqueue({
+                                            type: 'tool-input-delta',
+                                            id: toolCall.id,
+                                            delta: toolCall.function.arguments,
+                                        });
+                                    }
+                                }
 
-                                // check if tool call is complete
-                                if (toolCall.function?.name != null && toolCall.function?.arguments != null && isParsableJson(toolCall.function.arguments)) {
+                                if (toolCallDelta.function?.arguments != null) {
+                                    toolCall.function.arguments += toolCallDelta.function.arguments;
+                                }
+
+                                if (toolCall.hasStarted && toolCallDelta.function?.arguments != null) {
                                     controller.enqueue({
-                                        type: 'tool-input-end',
+                                        type: 'tool-input-delta',
                                         id: toolCall.id,
+                                        delta: toolCallDelta.function.arguments,
                                     });
-
-                                    controller.enqueue({
-                                        type: 'tool-call',
-                                        toolCallId: toolCall.id ?? generateId(),
-                                        toolName: toolCall.function.name,
-                                        input: toolCall.function.arguments,
-                                    });
-                                    toolCall.hasFinished = true;
                                 }
                             }
                         }
@@ -608,6 +522,9 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                         // go through all tool calls and send the ones that are not finished
                         for (const toolCall of toolCalls.filter((toolCall) => !toolCall.hasFinished)) {
+                            if (toolCall.function.name.length === 0) {
+                                throw new InvalidResponseDataError({ data: toolCall, message: `Expected 'function.name' to be a string.` });
+                            }
                             controller.enqueue({
                                 type: 'tool-input-end',
                                 id: toolCall.id,

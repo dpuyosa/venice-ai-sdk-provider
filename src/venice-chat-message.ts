@@ -13,8 +13,9 @@ export type VeniceContentPartAudio = {
         format: 'wav' | 'mp3' | 'aiff' | 'aac' | 'ogg' | 'flac' | 'm4a' | 'pcm16' | 'pcm24';
     };
 };
+export type VeniceContentPartFile = { type: 'file'; file: { file_data: string; filename?: string } };
 
-export type VeniceUserMessageContentPart = VeniceContentPartText | VeniceContentPartImage | VeniceContentPartAudio | VeniceContentPartVideo;
+export type VeniceUserMessageContentPart = VeniceContentPartText | VeniceContentPartImage | VeniceContentPartAudio | VeniceContentPartVideo | VeniceContentPartFile;
 
 // Allow for arbitrary additional properties for general purpose
 // provider-metadata-specific extensibility.

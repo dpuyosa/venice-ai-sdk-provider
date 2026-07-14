@@ -30,7 +30,7 @@ Pre-commit hook (`.husky/pre-commit`) runs `npx lint-staged`, which runs `pretti
 - Source: `src/`. Library entry: `src/index.ts` (re-exports `createVenice`, `venice`, `VeniceProvider`, `VeniceProviderSettings`, `VeniceLanguageModelOptions`, `VERSION`). New public exports must be added here.
 - Key modules:
   - `venice-provider.ts` - `createVenice()`, env/header setup, default `venice` instance. Reads `VENICE_API_KEY`.
-  - `venice-chat-language-model.ts` - chat completions (`doGenerate`, `doStream`). Owns Venice-specific streaming quirks (`<think>` mocking for `qwen3-4b`, reasoning-end-before-text, `reasoning_details` / `reasoning_encrypted` handling).
+  - `venice-chat-language-model.ts` - chat completions (`doGenerate`, `doStream`). Owns Venice-specific streaming quirks (reasoning-end-before-text, `reasoning_details` / `reasoning_encrypted` handling).
   - `venice-prepare-tools.ts` - tool/toolChoice mapping for the OpenAI-compatible wire format.
   - `convert-to-venice-chat-messages.ts` - prompt → Venice chat messages (handles Claude content-array forcing, multimodal conversion for image/audio/video files).
   - `venice-chat-options.ts` - Zod schemas for `veniceParameters` and `veniceLanguageModelOptions`.
@@ -62,7 +62,7 @@ Pre-commit hook (`.husky/pre-commit`) runs `npx lint-staged`, which runs `pretti
 - Tool warnings use `SharedV3Warning` with `{ type: 'unsupported', feature }`; the V2 `{ type: 'unsupported-tool', tool }` is invalid. In `prepareTools`, check `tool.type === 'provider'` (NOT `'provider-defined'`).
 - Provider options keys: prefer `venice`. The deprecated `openai-compatible` key is still parsed and emits a `'other'` warning; `openaiCompatible` is the transitional alias. Merge order in `getArgs`: deprecated < `openaiCompatible` < `venice`.
 - Before any text or tool-call stream chunk, close the active reasoning block (`reasoning-end`).
-- `qwen3-4b` has special handling: it doesn't emit native `reasoning_content`, so `<think>…</think>` tags in text are parsed and re-emitted as reasoning segments (`isThinkingModel`). Venice Gemini-family responses also use `reasoning_details` / `reasoning_encrypted` for reasoning metadata; do not assume Google `extra_content.thought_signature` is present.
+- Venice Gemini-family responses use `reasoning_details` / `reasoning_encrypted` for reasoning metadata; do not assume Google `extra_content.thought_signature` is present.
 
 ## Build / Packaging Notes
 
