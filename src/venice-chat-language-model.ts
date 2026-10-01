@@ -20,7 +20,7 @@ import { mapFinishReason } from './map-finish-reason';
 import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
 import { convertVeniceChatUsage } from './venice-chat-usage';
-import { defaultVeniceErrorStructure } from './venice-error';
+import { defaultVeniceErrorStructure, getVeniceErrorMessage } from './venice-error';
 import type { MetadataExtractor } from './venice-metadata-extractor';
 import { prepareVeniceParameters } from './venice-prepare-parameters';
 import { prepareTools } from './venice-prepare-tools';
@@ -348,7 +348,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
                         if ('error' in chunk.value) {
                             finishReason = { unified: 'error', raw: undefined };
-                            controller.enqueue({ type: 'error', error: chunk.value.error.message });
+                            controller.enqueue({ type: 'error', error: getVeniceErrorMessage(chunk.value) });
                             return;
                         }
 
