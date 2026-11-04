@@ -262,6 +262,88 @@ describe('convertToVeniceChatMessages', () => {
         });
     });
 
+    it('forwards venice imageDetail onto the image_url block without leaking it to the outer part', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'file',
+                            mediaType: 'image/png',
+                            data: new Uint8Array([1, 2]),
+                            providerOptions: { venice: { imageDetail: 'high', cache_control: { type: 'ephemeral' } } },
+                        },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({
+            role: 'user',
+            content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AQI=', detail: 'high' }, cache_control: { type: 'ephemeral' } }],
+        });
+    });
+
+    it('forwards venice detail alias onto the image_url block without leaking it to the outer part', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'file',
+                            mediaType: 'image/png',
+                            data: new Uint8Array([1, 2]),
+                            providerOptions: { venice: { detail: 'original' } },
+                        },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({
+            role: 'user',
+            content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AQI=', detail: 'original' } }],
+        });
+    });
+
+    it('forwards venice imageDetail from tool-result image-data and image-url parts', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'tool',
+                    content: [
+                        {
+                            type: 'tool-result',
+                            toolCallId: 'c1',
+                            toolName: 'img',
+                            output: {
+                                type: 'content',
+                                value: [
+                                    { type: 'image-data', mediaType: 'image/png', data: 'AQI=', providerOptions: { venice: { imageDetail: 'low' } } },
+                                    { type: 'image-url', url: 'https://example.com/img.png', providerOptions: { venice: { imageDetail: 'high' } } },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages[1]).toEqual({
+            role: 'user',
+            content: [
+                { type: 'text', text: '[Tool Result: c1]' },
+                { type: 'image_url', image_url: { url: 'data:image/png;base64,AQI=', detail: 'low' } },
+                { type: 'image_url', image_url: { url: 'https://example.com/img.png', detail: 'high' } },
+            ],
+        });
+    });
+
     it('only passes documented public URL categories through to Venice', async () => {
         const model = new VeniceChatLanguageModel('model', {
             provider: 'venice.chat',

@@ -266,6 +266,12 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             prompt_cache_key: compatibleOptions.promptCacheKey,
             prompt_cache_retention: compatibleOptions.promptCacheRetention,
 
+            anon_user_id: compatibleOptions.anonUserId,
+            fallbacks: compatibleOptions.fallbacks,
+            metadata: compatibleOptions.metadata,
+            include: compatibleOptions.include,
+            store: compatibleOptions.store,
+
             parallel_tool_calls: compatibleOptions.parallelToolCalls,
 
             venice_parameters: prepareVeniceParameters({ veniceParameters: compatibleOptions.veniceParameters }),

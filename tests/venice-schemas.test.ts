@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { veniceLanguageModelOptionsSchema, verbosityValues } from '../src/venice-chat-options';
+import { veniceLanguageModelOptionsSchema, veniceParametersSchema, verbosityValues } from '../src/venice-chat-options';
+import { prepareVeniceParameters } from '../src/venice-prepare-parameters';
 import { VeniceChatResponseSchema, veniceChunkSchema, veniceContentSchema } from '../src/venice-response';
 
 describe('VeniceChatResponseSchema', () => {
@@ -53,6 +54,17 @@ describe('VeniceChatResponseSchema', () => {
         });
 
         expect(parsed.choices?.[0]?.message.reasoning_details?.[0]?.thought_signature).toBe('sig-detail');
+    });
+
+    it('preserves documented and unmodeled venice_parameters keys', () => {
+        const parsed = VeniceChatResponseSchema.parse({
+            choices: [],
+            venice_parameters: { enable_x_search: true, character_slug: 'alice', provider_extra: 'kept' },
+        });
+
+        expect(parsed.venice_parameters?.enable_x_search).toBe(true);
+        expect(parsed.venice_parameters?.character_slug).toBe('alice');
+        expect(parsed.venice_parameters?.provider_extra).toBe('kept');
     });
 });
 
@@ -115,6 +127,17 @@ describe('veniceChunkSchema', () => {
         expect(parsed.cost?.diem).toBe(0.001);
         expect(parsed.venice_parameters?.web_search_citations?.[0]?.title).toBe('Example');
     });
+
+    it('preserves documented and unmodeled venice_parameters keys', () => {
+        const parsed = veniceChunkSchema.parse({
+            choices: [],
+            venice_parameters: { enable_x_search: true, character_slug: 'alice', provider_extra: 'kept' },
+        });
+
+        expect(parsed.venice_parameters?.enable_x_search).toBe(true);
+        expect(parsed.venice_parameters?.character_slug).toBe('alice');
+        expect(parsed.venice_parameters?.provider_extra).toBe('kept');
+    });
 });
 
 describe('veniceContentSchema', () => {
@@ -154,6 +177,40 @@ describe('veniceTokenUsageSchema (via response)', () => {
     });
 });
 
+describe('veniceParametersSchema', () => {
+    it('preserves unknown keys', () => {
+        const parsed = veniceParametersSchema.parse({ enableWebSearch: 'on', providerExtra: true, snake_key: 'value' });
+
+        expect(parsed.enableWebSearch).toBe('on');
+        expect(parsed.providerExtra).toBe(true);
+        expect(parsed.snake_key).toBe('value');
+    });
+
+    it('defaults includeVeniceSystemPrompt to false', () => {
+        expect(veniceParametersSchema.parse({}).includeVeniceSystemPrompt).toBe(false);
+    });
+});
+
+describe('prepareVeniceParameters', () => {
+    it('converts known and unknown camelCase keys to snake_case', () => {
+        const prepared = prepareVeniceParameters({
+            veniceParameters: { enableWebSearch: 'on', providerExtra: true, snake_key: 'value' },
+        });
+
+        expect(prepared).toEqual({
+            enable_web_search: 'on',
+            provider_extra: true,
+            snake_key: 'value',
+            include_venice_system_prompt: false,
+        });
+    });
+
+    it('keeps include_venice_system_prompt false when veniceParameters is omitted or empty', () => {
+        expect(prepareVeniceParameters({ veniceParameters: undefined })).toEqual({ include_venice_system_prompt: false });
+        expect(prepareVeniceParameters({ veniceParameters: {} })).toEqual({ include_venice_system_prompt: false });
+    });
+});
+
 describe('veniceLanguageModelOptionsSchema', () => {
     it('accepts null reasoningEffort', () => {
         const parsed = veniceLanguageModelOptionsSchema.safeParse({ reasoningEffort: null });
@@ -176,5 +233,40 @@ describe('veniceLanguageModelOptionsSchema', () => {
 
     it('exposes verbosity values', () => {
         expect(verbosityValues).toEqual(['low', 'medium', 'high', 'auto']);
+    });
+
+    it('accepts typed request options', () => {
+        const parsed = veniceLanguageModelOptionsSchema.safeParse({
+            anonUserId: 'user-123',
+            fallbacks: [{ model: 'venice-uncensored' }],
+            metadata: { key: 'value' },
+            include: ['venice_parameters'],
+            store: true,
+        });
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.data?.anonUserId).toBe('user-123');
+        expect(parsed.data?.fallbacks).toEqual([{ model: 'venice-uncensored' }]);
+        expect(parsed.data?.metadata).toEqual({ key: 'value' });
+        expect(parsed.data?.include).toEqual(['venice_parameters']);
+        expect(parsed.data?.store).toBe(true);
+    });
+
+    it('rejects invalid anonUserId values', () => {
+        const invalid = ['', 'a'.repeat(129), 'user\u0001', 'user||other'];
+
+        for (const anonUserId of invalid) {
+            expect(veniceLanguageModelOptionsSchema.safeParse({ anonUserId }).success).toBe(false);
+        }
+    });
+
+    it('accepts anonUserId at the length limit', () => {
+        expect(veniceLanguageModelOptionsSchema.safeParse({ anonUserId: 'a'.repeat(128) }).success).toBe(true);
+    });
+
+    it('rejects more than 10 fallbacks', () => {
+        const fallbacks = Array.from({ length: 11 }, (_, index) => ({ model: `model-${index}` }));
+
+        expect(veniceLanguageModelOptionsSchema.safeParse({ fallbacks }).success).toBe(false);
     });
 });

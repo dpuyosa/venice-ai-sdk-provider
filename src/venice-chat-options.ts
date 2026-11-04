@@ -18,7 +18,7 @@ export const verbosityValues = ['low', 'medium', 'high', 'auto'] as const;
 
 export type Verbosity = (typeof verbosityValues)[number];
 
-export const veniceParametersSchema = z.object({
+export const veniceParametersSchema = z.looseObject({
     enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
     enableWebScraping: z.boolean().optional(),
     enableWebCitations: z.boolean().optional(),
@@ -88,6 +88,25 @@ export const veniceLanguageModelOptionsSchema = z.object({
     minTemp: z.number().min(0).max(2).optional(),
 
     n: z.int().min(1).optional(),
+
+    anonUserId: z
+        .string()
+        .min(1)
+        .max(128)
+        .regex(/^[\x20-\x7E]+$/)
+        .refine((val) => !val.includes('||'), { message: 'anonUserId must not contain ||' })
+        .optional(),
+
+    fallbacks: z
+        .array(z.object({ model: z.string() }))
+        .max(10)
+        .optional(),
+
+    metadata: z.record(z.string(), z.string()).optional(),
+
+    include: z.array(z.string()).optional(),
+
+    store: z.boolean().optional(),
 });
 
 export type VeniceLanguageModelOptions = z.infer<typeof veniceLanguageModelOptionsSchema>;

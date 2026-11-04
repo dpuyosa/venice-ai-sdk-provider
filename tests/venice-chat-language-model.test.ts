@@ -447,6 +447,60 @@ describe('VeniceChatLanguageModel provider options', () => {
         expect(requests[0]?.extra_field).toBe('x');
     });
 
+    it('forwards typed attribution, fallback, metadata, include, and store options', async () => {
+        const { model, requests } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        await model.doGenerate({
+            prompt,
+            providerOptions: {
+                venice: {
+                    anonUserId: 'end-user-123',
+                    fallbacks: [{ model: 'claude-opus-4-8' }],
+                    metadata: { trace: 'abc' },
+                    include: ['cost'],
+                    store: true,
+                },
+            },
+        });
+
+        expect(requests[0]?.anon_user_id).toBe('end-user-123');
+        expect(requests[0]?.fallbacks).toEqual([{ model: 'claude-opus-4-8' }]);
+        expect(requests[0]?.metadata).toEqual({ trace: 'abc' });
+        expect(requests[0]?.include).toEqual(['cost']);
+        expect(requests[0]?.store).toBe(true);
+    });
+
+    it('forwards unknown veniceParameters keys as snake_case', async () => {
+        const { model, requests } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        await model.doGenerate({ prompt, providerOptions: { venice: { veniceParameters: { customVeniceFlag: true } } } });
+
+        expect(requests[0]?.venice_parameters).toMatchObject({ custom_venice_flag: true });
+    });
+
+    it('forwards imageDetail from a file part onto image_url.detail', async () => {
+        const { model, requests } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        await model.doGenerate({
+            prompt: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'file',
+                            mediaType: 'image/png',
+                            data: new Uint8Array([1, 2]),
+                            providerOptions: { venice: { imageDetail: 'high' } },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const messages = requests[0]?.messages as Array<{ content: Array<{ image_url?: { url: string; detail?: string } }> }>;
+        expect(messages[0]?.content[0]?.image_url).toEqual({ url: 'data:image/png;base64,AQI=', detail: 'high' });
+    });
+
     it('uses a custom convertUsage', async () => {
         const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer' })), {
             convertUsage: (usage) => emptyUsage(usage ?? undefined),

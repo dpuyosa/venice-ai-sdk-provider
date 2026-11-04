@@ -8,6 +8,7 @@ import type {
     VeniceContentPartFile,
     VeniceContentPartImage,
     VeniceContentPartVideo,
+    VeniceImageDetail,
     VeniceMessageToolCall,
     VeniceReasoningDetail,
     VeniceUserMessageContentPart,
@@ -71,17 +72,26 @@ function isClaudeModel(modelId: string): boolean {
     return modelId.toLowerCase().includes('claude');
 }
 
+function isVeniceImageDetail(value: unknown): value is VeniceImageDetail {
+    return value === 'auto' || value === 'low' || value === 'high' || value === 'original';
+}
+
 function createImageContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartImage & object {
     const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
     if (data instanceof URL && data.protocol !== 'http:' && data.protocol !== 'https:') {
         throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${data.protocol}` });
     }
+    const restMetadata: Record<string, unknown> = { ...(partMetadata ?? {}) };
+    const rawDetail = restMetadata.imageDetail ?? restMetadata.detail;
+    delete restMetadata.imageDetail;
+    delete restMetadata.detail;
     return {
         type: 'image_url',
         image_url: {
             url: data instanceof URL ? data.toString() : `data:${finalMediaType};base64,${convertToBase64(data)}`,
+            ...(isVeniceImageDetail(rawDetail) ? { detail: rawDetail } : {}),
         },
-        ...partMetadata,
+        ...restMetadata,
     };
 }
 
@@ -293,9 +303,9 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                             const mediaParts: Array<VeniceUserMessageContentPart> = [];
                             for (const part of output.value) {
                                 if (part.type === 'image-data') {
-                                    mediaParts.push(createImageContentPart(part.mediaType, part.data));
+                                    mediaParts.push(createImageContentPart(part.mediaType, part.data, getVeniceMetadata(part)));
                                 } else if (part.type === 'image-url') {
-                                    mediaParts.push(createImageContentPart('image/*', new URL(part.url)));
+                                    mediaParts.push(createImageContentPart('image/*', new URL(part.url), getVeniceMetadata(part)));
                                 } else if (part.type === 'file-data') {
                                     if (part.mediaType?.startsWith('video/')) {
                                         mediaParts.push(createVideoContentPart(part.mediaType, part.data));

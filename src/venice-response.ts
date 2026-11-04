@@ -51,13 +51,15 @@ const veniceCostSchema = z
     .nullish();
 
 const veniceResponseParametersSchema = z
-    .object({
+    .looseObject({
         strip_thinking_response: z.boolean().nullish(),
         disable_thinking: z.boolean().nullish(),
         enable_web_search: z.string().nullish(),
         enable_web_scraping: z.boolean().nullish(),
         enable_web_citations: z.boolean().nullish(),
         enable_e2ee: z.boolean().nullish(),
+        enable_x_search: z.boolean().nullish(),
+        character_slug: z.string().nullish(),
         include_search_results_in_stream: z.boolean().nullish(),
         include_venice_system_prompt: z.boolean().nullish(),
         web_search_citations: z

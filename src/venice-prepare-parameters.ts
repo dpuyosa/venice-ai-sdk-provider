@@ -37,7 +37,7 @@ function toSnakeCase(str: string): string {
 export function prepareVeniceParameters({ veniceParameters }: { veniceParameters: VeniceParametersInput | undefined }): VeniceParametersOutput | undefined {
     const result: Record<string, unknown> = {};
 
-    const source = veniceParameters ?? veniceParametersSchema.parse({});
+    const source = veniceParametersSchema.parse(veniceParameters ?? {});
     for (const [key, value] of Object.entries(source)) {
         if (value !== undefined) {
             result[toSnakeCase(key)] = value;

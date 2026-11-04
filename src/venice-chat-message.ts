@@ -4,7 +4,8 @@ export type VeniceChatPrompt = Array<VeniceMessage>;
 export type VeniceMessage = VeniceSystemMessage | VeniceUserMessage | VeniceAssistantMessage | VeniceToolMessage;
 
 export type VeniceContentPartText = { type: 'text'; text: string };
-export type VeniceContentPartImage = { type: 'image_url'; image_url: { url: string } };
+export type VeniceImageDetail = 'auto' | 'low' | 'high' | 'original';
+export type VeniceContentPartImage = { type: 'image_url'; image_url: { url: string; detail?: VeniceImageDetail } };
 export type VeniceContentPartVideo = { type: 'video_url'; video_url: { url: string } };
 export type VeniceContentPartAudio = {
     type: 'input_audio';
