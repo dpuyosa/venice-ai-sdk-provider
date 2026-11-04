@@ -1,13 +1,50 @@
 import type { LanguageModelV3DataContent, LanguageModelV3Prompt, SharedV3ProviderMetadata } from '@ai-sdk/provider';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
-import { convertToBase64 } from '@ai-sdk/provider-utils';
-import type { VeniceChatPrompt, VeniceContentPartAudio, VeniceContentPartFile, VeniceContentPartImage, VeniceContentPartVideo, VeniceUserMessageContentPart } from './venice-chat-message';
+import { convertToBase64, secureJsonParse, stringifyWithBigIntAndCycles } from '@ai-sdk/provider-utils';
+import type {
+    VeniceChatPrompt,
+    VeniceContentPartAudio,
+    VeniceContentPartFile,
+    VeniceContentPartImage,
+    VeniceContentPartVideo,
+    VeniceMessageToolCall,
+    VeniceReasoningDetail,
+    VeniceUserMessageContentPart,
+} from './venice-chat-message';
+
+const REASONING_METADATA_KEYS = ['thoughtSignature', 'thought_signature', 'reasoningDetails', 'reasoning_details', 'reasoningEncrypted', 'reasoning_encrypted'];
 
 function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
     const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
     const venice = message?.providerOptions?.venice ?? {};
     return { ...openaiCompatible, ...venice };
+}
+
+function readReasoningDetails(metadata: Record<string, unknown>): VeniceReasoningDetail[] {
+    const details = metadata.reasoningDetails ?? metadata.reasoning_details;
+    return Array.isArray(details) ? (details as VeniceReasoningDetail[]) : [];
+}
+
+function readThoughtSignature(metadata: Record<string, unknown>): string | undefined {
+    const signature = metadata.thoughtSignature ?? metadata.thought_signature;
+    return typeof signature === 'string' && signature.length > 0 ? signature : undefined;
+}
+
+function omitReasoningMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(metadata).filter(([key]) => !REASONING_METADATA_KEYS.includes(key)));
+}
+
+function serializeToolCallArguments(input: unknown): string {
+    if (typeof input === 'string') {
+        try {
+            secureJsonParse(input);
+            return input;
+        } catch {
+            return JSON.stringify(input);
+        }
+    }
+    return stringifyWithBigIntAndCycles(input);
 }
 
 function extractAudioFormat(mimeType: string): 'wav' | 'mp3' | 'aiff' | 'aac' | 'ogg' | 'flac' | 'm4a' | 'pcm16' | 'pcm24' {
@@ -21,8 +58,13 @@ function extractAudioFormat(mimeType: string): 'wav' | 'mp3' | 'aiff' | 'aac' | 
         'audio/flac': 'flac',
         'audio/m4a': 'm4a',
         'audio/pcm': 'pcm16',
+        'audio/pcm24': 'pcm24',
     };
-    return formatMap[mimeType.toLowerCase()] ?? 'wav';
+    const format = formatMap[mimeType.toLowerCase()];
+    if (format == null) {
+        throw new UnsupportedFunctionalityError({ functionality: `audio media type ${mimeType}` });
+    }
+    return format;
 }
 
 function isClaudeModel(modelId: string): boolean {
@@ -157,28 +199,37 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
             case 'assistant': {
                 let assistantText = '';
                 let reasoningText = '';
+                let messageThoughtSignature: string | undefined;
                 const assistantMetadata = {};
-                const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
+                const reasoningDetails: VeniceReasoningDetail[] = [];
+                const toolCalls: VeniceMessageToolCall[] = [];
 
                 for (const part of content) {
-                    Object.assign(assistantMetadata, getVeniceMetadata(part));
+                    const partMetadata = getVeniceMetadata(part);
                     switch (part.type) {
                         case 'text': {
                             assistantText += part.text;
+                            Object.assign(assistantMetadata, partMetadata);
                             break;
                         }
                         case 'reasoning': {
                             reasoningText += part.text;
+                            reasoningDetails.push(...readReasoningDetails(partMetadata));
+                            messageThoughtSignature = readThoughtSignature(partMetadata) ?? messageThoughtSignature;
                             break;
                         }
                         case 'tool-call': {
+                            const thoughtSignature = readThoughtSignature(partMetadata) ?? readThoughtSignature(part.providerOptions?.google ?? {});
+                            reasoningDetails.push(...readReasoningDetails(partMetadata));
                             toolCalls.push({
                                 id: part.toolCallId,
                                 type: 'function',
                                 function: {
                                     name: part.toolName,
-                                    arguments: JSON.stringify(part.input),
+                                    arguments: serializeToolCallArguments(part.input),
                                 },
+                                ...(thoughtSignature == null ? {} : { thought_signature: thoughtSignature }),
+                                ...omitReasoningMetadata(partMetadata),
                             });
                             break;
                         }
@@ -190,15 +241,21 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                     }
                 }
 
-                if (!(assistantText.length || toolCalls.length)) break;
+                const messageMetadata = getVeniceMetadata({ providerOptions });
+                reasoningDetails.push(...readReasoningDetails(messageMetadata));
+                messageThoughtSignature = readThoughtSignature(messageMetadata) ?? messageThoughtSignature;
+
+                if (!(assistantText.length || toolCalls.length || reasoningText.length || reasoningDetails.length || messageThoughtSignature != null)) break;
                 if (!assistantText.length) assistantText = '\n';
 
                 messages.push({
                     role: 'assistant',
                     tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
                     reasoning_content: reasoningText.length > 0 ? reasoningText : undefined,
+                    reasoning_details: reasoningDetails.length > 0 ? reasoningDetails : undefined,
+                    ...(messageThoughtSignature == null ? {} : { thought_signature: messageThoughtSignature }),
                     content: forceContentArray || Object.keys(assistantMetadata).length > 0 ? [{ type: 'text', text: assistantText, ...assistantMetadata }] : assistantText,
-                    ...getVeniceMetadata({ providerOptions }),
+                    ...omitReasoningMetadata(messageMetadata),
                 });
 
                 break;
@@ -292,7 +349,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                         case 'content':
                         case 'json':
                         case 'error-json':
-                            contentValue = JSON.stringify(output.value);
+                            contentValue = stringifyWithBigIntAndCycles(output.value);
                             break;
                         default:
                             contentValue = '';

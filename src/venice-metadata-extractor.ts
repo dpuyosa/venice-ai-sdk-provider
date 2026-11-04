@@ -31,11 +31,41 @@ export function createVeniceMetadataExtractor(providerName: string): MetadataExt
             return Object.keys(metadata).length > 0 ? ({ [providerName]: metadata } as SharedV3ProviderMetadata) : undefined;
         },
 
-        createStreamExtractor: () => ({
-            processChunk() {},
-            buildMetadata() {
-                return undefined;
-            },
-        }),
+        createStreamExtractor: () => {
+            let cost: VeniceChatResponse['cost'];
+            let webSearchCitations: NonNullable<VeniceChatResponse['venice_parameters']>['web_search_citations'];
+
+            return {
+                processChunk(parsedChunk: unknown): void {
+                    if (typeof parsedChunk !== 'object' || parsedChunk === null) {
+                        return;
+                    }
+
+                    const chunk = parsedChunk as Partial<VeniceChatResponse>;
+                    if (chunk.cost != null) {
+                        cost = chunk.cost;
+                    }
+
+                    const citations = chunk.venice_parameters?.web_search_citations;
+                    if (citations != null && citations.length > 0) {
+                        webSearchCitations = citations;
+                    }
+                },
+
+                buildMetadata(): SharedV3ProviderMetadata | undefined {
+                    const metadata: Record<string, unknown> = {};
+
+                    if (cost != null) {
+                        metadata.cost = cost;
+                    }
+
+                    if (webSearchCitations != null) {
+                        metadata.webSearchCitations = webSearchCitations;
+                    }
+
+                    return Object.keys(metadata).length > 0 ? ({ [providerName]: metadata } as SharedV3ProviderMetadata) : undefined;
+                },
+            };
+        },
     };
 }

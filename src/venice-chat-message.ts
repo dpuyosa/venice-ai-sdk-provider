@@ -33,20 +33,22 @@ export interface VeniceUserMessage extends JsonRecord<VeniceUserMessageContentPa
 
 export type VeniceReasoningDetail = {
     type: string;
-    id?: string;
-    format?: string;
-    index?: number;
-    text?: string;
-    data?: string;
+    id?: string | null;
+    format?: string | null;
+    index?: number | null;
+    text?: string | null;
+    data?: string | null;
+    [key: string]: JSONValue | undefined;
 };
 
 export interface VeniceAssistantMessage extends JsonRecord<VeniceContentPartText | VeniceMessageToolCall> {
     role: 'assistant';
     name?: string;
+    thought_signature?: string;
     tool_calls?: Array<VeniceMessageToolCall>;
     reasoning_content?: string;
     reasoning_details?: Array<VeniceReasoningDetail>;
-    content: string | Array<VeniceContentPartText>;
+    content: string | null | Array<VeniceContentPartText>;
 }
 
 export interface VeniceToolMessage extends JsonRecord<VeniceContentPartText> {
@@ -58,6 +60,7 @@ export interface VeniceToolMessage extends JsonRecord<VeniceContentPartText> {
 export type VeniceMessageToolCall = {
     type: 'function';
     id: string;
+    thought_signature?: string;
     function: {
         arguments: string;
         name: string;

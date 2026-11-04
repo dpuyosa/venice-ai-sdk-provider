@@ -29,13 +29,13 @@ export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): Veni
     return {
         inputTokens: {
             total: promptTokens,
-            noCache: promptTokens - cacheReadTokens,
+            noCache: Math.max(0, promptTokens - cacheReadTokens),
             cacheRead: cacheReadTokens,
             cacheWrite: usage.prompt_tokens_details?.cache_creation_input_tokens ?? undefined,
         },
         outputTokens: {
             total: completionTokens,
-            text: completionTokens - reasoningTokens,
+            text: Math.max(0, completionTokens - reasoningTokens),
             reasoning: reasoningTokens,
         },
         raw: usage,

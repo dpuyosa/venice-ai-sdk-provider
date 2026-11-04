@@ -10,6 +10,7 @@ const veniceTokenUsageSchema = z
                 cached_tokens: z.number().nullish(),
                 cache_creation_input_tokens: z.number().nullish(),
             })
+            .catchall(z.json())
             .nullish(),
         completion_tokens_details: z
             .object({
@@ -19,10 +20,59 @@ const veniceTokenUsageSchema = z
                 image_tokens: z.number().nullish(),
                 audio_tokens: z.number().nullish(),
             })
+            .catchall(z.json())
             .nullish(),
     })
+    .catchall(z.json())
     .nullish();
 export type VeniceTokenUsage = z.infer<typeof veniceTokenUsageSchema>;
+
+const veniceReasoningDetailSchema = z
+    .object({
+        type: z.string(),
+        id: z.string().nullish(),
+        format: z.string().nullish(),
+        index: z.number().nullish(),
+        text: z.string().nullish(),
+        data: z.string().nullish(),
+    })
+    .catchall(z.json());
+
+const veniceThoughtSignatureSchema = z.object({ google: z.object({ thought_signature: z.string().nullish() }).nullish() }).nullish();
+
+export const veniceContentSchema = z.union([z.string(), z.array(z.looseObject({ type: z.string() }))]).nullish();
+export type VeniceContent = z.infer<typeof veniceContentSchema>;
+
+const veniceCostSchema = z
+    .object({
+        diem: z.number(),
+        usd: z.number(),
+    })
+    .nullish();
+
+const veniceResponseParametersSchema = z
+    .object({
+        strip_thinking_response: z.boolean().nullish(),
+        disable_thinking: z.boolean().nullish(),
+        enable_web_search: z.string().nullish(),
+        enable_web_scraping: z.boolean().nullish(),
+        enable_web_citations: z.boolean().nullish(),
+        enable_e2ee: z.boolean().nullish(),
+        include_search_results_in_stream: z.boolean().nullish(),
+        include_venice_system_prompt: z.boolean().nullish(),
+        web_search_citations: z
+            .array(
+                z.object({
+                    title: z.string(),
+                    url: z.string(),
+                    content: z.string().nullish(),
+                    date: z.string().nullish(),
+                })
+            )
+            .nullish(),
+        return_search_results_as_documents: z.boolean().nullish(),
+    })
+    .nullish();
 
 export const VeniceChatResponseSchema = z.looseObject({
     id: z.string().nullish(),
@@ -38,7 +88,8 @@ export const VeniceChatResponseSchema = z.looseObject({
             message: z.object({
                 role: z.literal('assistant').nullish(),
                 name: z.string().nullish(),
-                content: z.string().nullish(),
+                content: veniceContentSchema,
+                thought_signature: z.string().nullish(),
                 refusal: z.string().nullish(),
                 annotations: z.array(z.any()).nullish(),
                 audio: z.any().nullish(),
@@ -47,6 +98,10 @@ export const VeniceChatResponseSchema = z.looseObject({
                     .array(
                         z.object({
                             id: z.string().nullish(),
+                            type: z.string().nullish(),
+                            index: z.number().nullish(),
+                            thought_signature: z.string().nullish(),
+                            extra_content: veniceThoughtSignatureSchema,
                             function: z.object({
                                 name: z.string(),
                                 arguments: z.string(),
@@ -57,18 +112,7 @@ export const VeniceChatResponseSchema = z.looseObject({
                 reasoning_content: z.string().nullish(),
                 reasoning: z.string().nullish(),
                 reasoning_encrypted: z.boolean().nullish(),
-                reasoning_details: z
-                    .array(
-                        z.object({
-                            type: z.string(),
-                            id: z.string().nullish(),
-                            format: z.string().nullish(),
-                            index: z.number().nullish(),
-                            text: z.string().nullish(),
-                            data: z.string().nullish(),
-                        })
-                    )
-                    .nullish(),
+                reasoning_details: z.array(veniceReasoningDetailSchema).nullish(),
             }),
             logprobs: z.any().nullish(),
             finish_reason: z.string().nullish(),
@@ -80,35 +124,8 @@ export const VeniceChatResponseSchema = z.looseObject({
     prompt_logprobs: z.any().nullish(),
     prompt_token_ids: z.array(z.number()).nullish(),
     kv_transfer_params: z.any().nullish(),
-    cost: z
-        .object({
-            diem: z.number(),
-            usd: z.number(),
-        })
-        .nullish(),
-    venice_parameters: z
-        .object({
-            strip_thinking_response: z.boolean().nullish(),
-            disable_thinking: z.boolean().nullish(),
-            enable_web_search: z.string().nullish(),
-            enable_web_scraping: z.boolean().nullish(),
-            enable_web_citations: z.boolean().nullish(),
-            enable_e2ee: z.boolean().nullish(),
-            include_search_results_in_stream: z.boolean().nullish(),
-            include_venice_system_prompt: z.boolean().nullish(),
-            web_search_citations: z
-                .array(
-                    z.object({
-                        title: z.string(),
-                        url: z.string(),
-                        content: z.string().nullish(),
-                        date: z.string().nullish(),
-                    })
-                )
-                .nullish(),
-            return_search_results_as_documents: z.boolean().nullish(),
-        })
-        .nullish(),
+    cost: veniceCostSchema,
+    venice_parameters: veniceResponseParametersSchema,
 });
 export type VeniceChatResponse = z.infer<typeof VeniceChatResponseSchema>;
 
@@ -120,30 +137,23 @@ export const veniceChunkSchema = z.looseObject({
         z.object({
             delta: z
                 .object({
-                    role: z.enum(['assistant']).nullish(),
-                    content: z.string().nullish(),
+                    role: z.enum(['assistant', '']).nullish(),
+                    content: veniceContentSchema,
+                    thought_signature: z.string().nullish(),
                     // Most openai-compatible models set `reasoning_content`, but some
                     // providers serving `gpt-oss` set `reasoning`. See #7866
                     reasoning_content: z.string().nullish(),
                     reasoning: z.string().nullish(),
                     reasoning_encrypted: z.boolean().nullish(),
-                    reasoning_details: z
-                        .array(
-                            z.object({
-                                type: z.string(),
-                                id: z.string().nullish(),
-                                format: z.string().nullish(),
-                                index: z.number().nullish(),
-                                text: z.string().nullish(),
-                                data: z.string().nullish(),
-                            })
-                        )
-                        .nullish(),
+                    reasoning_details: z.array(veniceReasoningDetailSchema).nullish(),
                     tool_calls: z
                         .array(
                             z.object({
                                 index: z.number().nullish(), //google does not send index
                                 id: z.string().nullish(),
+                                type: z.string().nullish(),
+                                thought_signature: z.string().nullish(),
+                                extra_content: veniceThoughtSignatureSchema,
                                 function: z.object({
                                     name: z.string().nullish(),
                                     arguments: z.string().nullish(),
@@ -158,5 +168,7 @@ export const veniceChunkSchema = z.looseObject({
         })
     ),
     usage: veniceTokenUsageSchema,
+    cost: veniceCostSchema,
+    venice_parameters: veniceResponseParametersSchema,
 });
 export const createVeniceChatChunkSchema = <ERROR_SCHEMA extends z.ZodType>(errorSchema: ERROR_SCHEMA) => z.union([veniceChunkSchema, errorSchema]);
