@@ -14,6 +14,10 @@ export const promptCacheRetentionValues = ['default', 'extended', '24h'] as cons
 
 export type PromptCacheRetention = (typeof promptCacheRetentionValues)[number];
 
+export const verbosityValues = ['low', 'medium', 'high', 'auto'] as const;
+
+export type Verbosity = (typeof verbosityValues)[number];
+
 export const veniceParametersSchema = z.object({
     enableWebSearch: z.enum(['off', 'on', 'auto']).optional(),
     enableWebScraping: z.boolean().optional(),
@@ -53,7 +57,11 @@ export const veniceLanguageModelOptionsSchema = z.object({
         })
         .optional(),
 
-    reasoningEffort: z.enum(reasoningEffortValues).optional(),
+    reasoningEffort: z.enum(reasoningEffortValues).nullish(),
+
+    verbosity: z.enum(verbosityValues).optional(),
+
+    textVerbosity: z.enum(verbosityValues).optional(),
 
     stopTokenIds: z.array(z.number()).optional(),
 

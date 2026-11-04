@@ -2,7 +2,9 @@ import { OpenAICompatibleCompletionLanguageModel, OpenAICompatibleEmbeddingModel
 import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from '@ai-sdk/provider-utils';
+import type { VeniceChatConfig } from './venice-chat-language-model';
 import { VeniceChatLanguageModel } from './venice-chat-language-model';
+import type { MetadataExtractor } from './venice-metadata-extractor';
 import { createVeniceMetadataExtractor } from './venice-metadata-extractor';
 import { VERSION } from './version';
 
@@ -46,12 +48,32 @@ export interface VeniceProviderSettings {
      * Whether the provider supports structured outputs in chat models.
      */
     supportsStructuredOutputs?: boolean;
+
+    /**
+     * Supported URLs for chat models.
+     */
+    supportedUrls?: VeniceChatConfig['supportedUrls'];
+
+    /**
+     * Metadata extractor for chat models. Defaults to the Venice metadata extractor.
+     */
+    metadataExtractor?: MetadataExtractor;
+
+    /**
+     * Transforms the request body before it is sent to the API.
+     */
+    transformRequestBody?: VeniceChatConfig['transformRequestBody'];
+
+    /**
+     * Custom usage converter for chat models.
+     */
+    convertUsage?: VeniceChatConfig['convertUsage'];
 }
 
 export interface VeniceProvider extends ProviderV3 {
     (modelId: string): VeniceChatLanguageModel;
-    languageModel(modelId: string): VeniceChatLanguageModel;
-    chatModel(modelId: string): VeniceChatLanguageModel;
+    languageModel(modelId: string, config?: Partial<VeniceChatConfig>): VeniceChatLanguageModel;
+    chatModel(modelId: string, config?: Partial<VeniceChatConfig>): VeniceChatLanguageModel;
     completionModel(modelId: string): LanguageModelV3;
     imageModel(modelId: string): ImageModelV3;
     embeddingModel(modelId: string): EmbeddingModelV3;
@@ -90,20 +112,22 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
         fetch: options.fetch,
     });
 
-    const createChatModel = (modelId: string) =>
+    const createChatModel = (modelId: string, config: Partial<VeniceChatConfig> = {}) =>
         new VeniceChatLanguageModel(modelId, {
             ...getModelConfig('chat'),
             includeUsage: options.includeUsage,
             supportsStructuredOutputs: options.supportsStructuredOutputs,
-            metadataExtractor: createVeniceMetadataExtractor(providerName),
+            supportedUrls: options.supportedUrls,
+            metadataExtractor: options.metadataExtractor ?? createVeniceMetadataExtractor(providerName),
+            transformRequestBody: options.transformRequestBody,
+            convertUsage: options.convertUsage,
+            ...config,
         });
 
-    const createLanguageModel = (modelId: string) => createChatModel(modelId);
-
-    const provider = (modelId: string) => createLanguageModel(modelId);
+    const provider = (modelId: string) => createChatModel(modelId);
     provider.specificationVersion = 'v3' as const;
     provider.chatModel = createChatModel;
-    provider.languageModel = createLanguageModel;
+    provider.languageModel = createChatModel;
 
     provider.completionModel = (modelId: string) => new OpenAICompatibleCompletionLanguageModel(modelId, { ...getModelConfig('completion'), includeUsage: options.includeUsage });
     provider.imageModel = (modelId: string) => new OpenAICompatibleImageModel(modelId, getModelConfig('image'));
