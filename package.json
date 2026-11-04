@@ -38,22 +38,22 @@
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "^2.0.81",
-        "@ai-sdk/provider": "^3.0.18",
-        "@ai-sdk/provider-utils": "^4.0.57"
+        "@ai-sdk/openai-compatible": "^2.0.90",
+        "@ai-sdk/provider": "^3.0.19",
+        "@ai-sdk/provider-utils": "^4.0.64"
     },
     "devDependencies": {
-        "@biomejs/biome": "^2.5.15",
-        "@types/node": "^26.6.3",
+        "@biomejs/biome": "^2.6.4",
+        "@types/node": "^26.6.6",
         "husky": "^9.1.7",
         "lint-staged": "^17.6.0",
-        "tsup": "^8.5.1",
+        "tsup": "^9.0.0",
         "typescript": "^5.9.3",
-        "vitest": "^5.0.3",
-        "zod": "^4.6.5"
+        "vitest": "^5.1.0",
+        "zod": "^4.6.7"
     },
     "peerDependencies": {
-        "ai": "^6.0.90"
+        "ai": "^6.0.322"
     },
     "engines": {
         "node": ">=24"
