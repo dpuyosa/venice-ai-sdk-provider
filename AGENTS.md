@@ -55,6 +55,7 @@ Pre-commit hook (`.husky/pre-commit`) runs `bunx lint-staged`, which runs `biome
 - Prefer `type` aliases for union/structural shapes; `interface` for extendable object contracts. Avoid `any` - use `unknown` and narrow. Use `readonly` and `as const` where appropriate.
 - Errors: throw `Error` with clear messages; include `cause` when rethrowing. Catch only to add context. Validate external input with Zod (v4).
 - Async: `async`/`await`; no unhandled promises.
+- **Claude cache compatibility:** Claude models always use content-block arrays, including tool messages, and tool-only assistant turns use `"\n"` instead of `null`. This is intentional: Anthropic prompt caching is byte-exact, `cache_control` must live on content blocks, and empty text blocks cannot be cached. Do not normalize these back to strings/null or "align" them with `@ai-sdk/openai-compatible` or Venice's OpenAPI, which types tool content as a string.
 
 ## Vercel AI SDK v6 Wiring (gotchas)
 

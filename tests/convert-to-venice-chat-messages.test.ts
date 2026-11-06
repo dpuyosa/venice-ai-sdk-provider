@@ -32,6 +32,23 @@ describe('convertToVeniceChatMessages', () => {
         ]);
     });
 
+    it('keeps Claude tool messages as content arrays for cache_control', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+                { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 'call-1', toolName: 'lookup', input: {} }] },
+                { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'call-1', toolName: 'lookup', output: { type: 'text', value: 'ok' } }] },
+            ],
+            'claude-sonnet-5'
+        );
+
+        expect(messages[2]).toEqual({
+            role: 'tool',
+            tool_call_id: 'call-1',
+            content: [{ type: 'text', text: 'ok' }],
+        });
+    });
+
     it('normalizes empty tools to no tool messages', () => {
         expect(convertToVeniceChatMessages([{ role: 'tool', content: [] }], 'model')).toEqual([]);
     });

@@ -151,6 +151,7 @@ function createFileContentPart(mediaType: string, data: LanguageModelV3DataConte
 }
 
 export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, modelId: string): VeniceChatPrompt {
+    // Claude prompt caching needs cache_control on content blocks, so Claude messages (including tool messages) always use block arrays.
     const forceContentArray = isClaudeModel(modelId);
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
@@ -256,6 +257,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                 messageThoughtSignature = readThoughtSignature(messageMetadata) ?? messageThoughtSignature;
 
                 if (!(assistantText.length || toolCalls.length || reasoningText.length || reasoningDetails.length || messageThoughtSignature != null)) break;
+                // Anthropic cannot cache empty text blocks, so tool-only turns get "\n" instead of null/''.
                 if (!assistantText.length) assistantText = '\n';
 
                 messages.push({

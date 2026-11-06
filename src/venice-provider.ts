@@ -1,5 +1,6 @@
-import { OpenAICompatibleCompletionLanguageModel, OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
+import { OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
 import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
+import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from '@ai-sdk/provider-utils';
 import type { VeniceChatConfig } from './venice-chat-language-model';
@@ -74,6 +75,11 @@ export interface VeniceProvider extends ProviderV3 {
     (modelId: string): VeniceChatLanguageModel;
     languageModel(modelId: string, config?: Partial<VeniceChatConfig>): VeniceChatLanguageModel;
     chatModel(modelId: string, config?: Partial<VeniceChatConfig>): VeniceChatLanguageModel;
+    /**
+     * Venice does not implement the legacy `/completions` endpoint.
+     *
+     * @throws {UnsupportedFunctionalityError} Always.
+     */
     completionModel(modelId: string): LanguageModelV3;
     imageModel(modelId: string): ImageModelV3;
     embeddingModel(modelId: string): EmbeddingModelV3;
@@ -129,7 +135,12 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
     provider.chatModel = createChatModel;
     provider.languageModel = createChatModel;
 
-    provider.completionModel = (modelId: string) => new OpenAICompatibleCompletionLanguageModel(modelId, { ...getModelConfig('completion'), includeUsage: options.includeUsage });
+    provider.completionModel = () => {
+        throw new UnsupportedFunctionalityError({
+            functionality: 'completionModel',
+            message: "Venice does not implement the legacy '/completions' endpoint. Use 'chatModel' or 'languageModel' instead.",
+        });
+    };
     provider.imageModel = (modelId: string) => new OpenAICompatibleImageModel(modelId, getModelConfig('image'));
     provider.embeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getModelConfig('embedding'));
     provider.textEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getModelConfig('embedding'));
