@@ -2,14 +2,15 @@ import type { ProviderErrorStructure } from '@ai-sdk/openai-compatible';
 import type {
     APICallError,
     JSONObject,
-    LanguageModelV3,
-    LanguageModelV3CallOptions,
-    LanguageModelV3Content,
-    LanguageModelV3FinishReason,
-    LanguageModelV3StreamPart,
-    LanguageModelV3Usage,
-    SharedV3ProviderMetadata,
-    SharedV3Warning,
+    LanguageModelV4,
+    LanguageModelV4CallOptions,
+    LanguageModelV4Content,
+    LanguageModelV4FinishReason,
+    LanguageModelV4StreamPart,
+    LanguageModelV4Text,
+    LanguageModelV4Usage,
+    SharedV4ProviderMetadata,
+    SharedV4Warning,
 } from '@ai-sdk/provider';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
 import type { FetchFunction, ParseResult, ResponseHandler, StreamingToolCallDelta } from '@ai-sdk/provider-utils';
@@ -21,6 +22,8 @@ import { mapFinishReason } from './map-finish-reason';
 import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
 import { convertVeniceChatUsage } from './venice-chat-usage';
+import type { VeniceWebSearchCitations } from './venice-citations';
+import { buildVeniceCitations } from './venice-citations';
 import { defaultVeniceErrorStructure, getVeniceErrorMessage } from './venice-error';
 import type { MetadataExtractor } from './venice-metadata-extractor';
 import { prepareVeniceParameters } from './venice-prepare-parameters';
@@ -48,7 +51,7 @@ function getToolCallThoughtSignature(toolCall: Pick<VeniceStreamingToolCallDelta
     return toolCall.thought_signature ?? toolCall.extra_content?.google?.thought_signature ?? undefined;
 }
 
-function toProviderMetadataProps(metadataKey: string, metadata: JSONObject): { providerMetadata?: SharedV3ProviderMetadata } {
+function toProviderMetadataProps(metadataKey: string, metadata: JSONObject): { providerMetadata?: SharedV4ProviderMetadata } {
     return Object.keys(metadata).length > 0 ? { providerMetadata: { [metadataKey]: metadata } } : {};
 }
 
@@ -61,10 +64,10 @@ export interface VeniceChatConfig {
     // biome-ignore lint/suspicious/noExplicitAny: error structures are generic over caller-provided schemas.
     errorStructure?: ProviderErrorStructure<any>;
     supportsStructuredOutputs?: boolean;
-    supportedUrls?: () => LanguageModelV3['supportedUrls'];
+    supportedUrls?: () => LanguageModelV4['supportedUrls'];
     metadataExtractor?: MetadataExtractor;
     transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>;
-    convertUsage?: (usage: VeniceTokenUsage) => LanguageModelV3Usage;
+    convertUsage?: (usage: VeniceTokenUsage) => LanguageModelV4Usage;
 }
 
 function toCamelCase(str: string): string {
@@ -96,7 +99,7 @@ function buildReasoningArg(options: VeniceLanguageModelOptions): Record<string, 
     return reasoning;
 }
 
-function convertVeniceContent(content: VeniceContent): Array<Extract<LanguageModelV3Content, { type: 'text' | 'reasoning' }>> {
+function convertVeniceContent(content: VeniceContent): Array<Extract<LanguageModelV4Content, { type: 'text' | 'reasoning' }>> {
     if (content == null) {
         return [];
     }
@@ -105,7 +108,7 @@ function convertVeniceContent(content: VeniceContent): Array<Extract<LanguageMod
         return content.length > 0 ? [{ type: 'text', text: content }] : [];
     }
 
-    const result: Array<Extract<LanguageModelV3Content, { type: 'text' | 'reasoning' }>> = [];
+    const result: Array<Extract<LanguageModelV4Content, { type: 'text' | 'reasoning' }>> = [];
 
     for (const part of content) {
         if (part.type === 'text' && typeof part.text === 'string') {
@@ -127,8 +130,8 @@ function convertVeniceContent(content: VeniceContent): Array<Extract<LanguageMod
     return result;
 }
 
-export class VeniceChatLanguageModel implements LanguageModelV3 {
-    readonly specificationVersion = 'v3';
+export class VeniceChatLanguageModel implements LanguageModelV4 {
+    readonly specificationVersion = 'v4';
     readonly modelId: string;
     readonly config: VeniceChatConfig;
     private readonly failedResponseHandler: ResponseHandler<APICallError>;
@@ -172,8 +175,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         );
     }
 
-    private async getArgs(options: LanguageModelV3CallOptions) {
-        const warnings: SharedV3Warning[] = [];
+    private async getArgs(options: LanguageModelV4CallOptions) {
+        const warnings: SharedV4Warning[] = [];
 
         // Parse deprecated key first (lowest precedence).
         const deprecatedOptions = await parseProviderOptions({
@@ -184,7 +187,8 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
         if (deprecatedOptions != null) {
             warnings.push({
-                type: 'other' as const,
+                type: 'deprecated',
+                setting: 'openai-compatible',
                 message: `The 'openai-compatible' key in providerOptions is deprecated. Use 'venice' instead.`,
             });
         }
@@ -205,7 +209,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         if (compatibleOptions.n != null && compatibleOptions.n > 1) {
             warnings.push({
                 type: 'other',
-                message: `The Venice API supports multiple choices, but this LanguageModelV3 adapter exposes one completion; provider option 'n' was reduced from ${compatibleOptions.n} to 1.`,
+                message: `The Venice API supports multiple choices, but this LanguageModelV4 adapter exposes one completion; provider option 'n' was reduced from ${compatibleOptions.n} to 1.`,
             });
         }
 
@@ -232,6 +236,9 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             ...options.providerOptions?.[camelCaseProviderOptionsKey],
         });
         const passthroughOptions = Object.fromEntries(rawProviderOptions.filter(([key]) => !knownOptionKeys.includes(key)));
+
+        const topLevelReasoning = options.reasoning === 'provider-default' ? undefined : options.reasoning;
+        const reasoningEffort = compatibleOptions.reasoningEffort !== undefined ? compatibleOptions.reasoningEffort : topLevelReasoning;
 
         const args = {
             model: this.modelId,
@@ -261,7 +268,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             top_logprobs: compatibleOptions.topLogprobs,
 
             reasoning: buildReasoningArg(compatibleOptions),
-            ...(compatibleOptions.reasoningEffort !== undefined ? { reasoning_effort: compatibleOptions.reasoningEffort } : {}),
+            ...(reasoningEffort !== undefined ? { reasoning_effort: reasoningEffort } : {}),
             verbosity: compatibleOptions.verbosity ?? compatibleOptions.textVerbosity,
             prompt_cache_key: compatibleOptions.promptCacheKey,
             prompt_cache_retention: compatibleOptions.promptCacheRetention,
@@ -305,7 +312,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         };
     }
 
-    async doGenerate(options: LanguageModelV3CallOptions): Promise<Awaited<ReturnType<LanguageModelV3['doGenerate']>>> {
+    async doGenerate(options: LanguageModelV4CallOptions): Promise<Awaited<ReturnType<LanguageModelV4['doGenerate']>>> {
         const { args, warnings, metadataKey } = await this.getArgs(options);
         const untransformedBody = { ...args, stream: false };
         const body = this.config.transformRequestBody?.(untransformedBody) ?? untransformedBody;
@@ -333,7 +340,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         }
 
         const message = choice.message;
-        const content: Array<LanguageModelV3Content> = [];
+        const content: Array<LanguageModelV4Content> = [];
 
         const reasoning = message.reasoning_content ?? message.reasoning ?? null;
         const hasReasoningPart = reasoning != null && reasoning.length > 0;
@@ -379,6 +386,14 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             });
         });
 
+        const webSearchCitations = responseBody.venice_parameters?.web_search_citations;
+        if (webSearchCitations != null && webSearchCitations.length > 0) {
+            const lastTextPart = content.findLast((part): part is LanguageModelV4Text => part.type === 'text');
+            if (lastTextPart != null) {
+                lastTextPart.citations = buildVeniceCitations(webSearchCitations);
+            }
+        }
+
         if (!hasReasoningPart && toolCalls.length === 0 && messageThoughtSignature != null) {
             const lastTextPart = messageContent.findLast((part) => part.type === 'text');
             if (lastTextPart != null) {
@@ -387,7 +402,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         }
 
         const extractedMetadata = await this.config.metadataExtractor?.extractMetadata?.({ parsedBody: rawResponse });
-        const providerMetadata: SharedV3ProviderMetadata = {
+        const providerMetadata: SharedV4ProviderMetadata = {
             ...extractedMetadata,
             [metadataKey]: { ...(extractedMetadata?.[metadataKey] ?? {}) },
         };
@@ -420,7 +435,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         };
     }
 
-    async doStream(options: LanguageModelV3CallOptions): Promise<Awaited<ReturnType<LanguageModelV3['doStream']>>> {
+    async doStream(options: LanguageModelV4CallOptions): Promise<Awaited<ReturnType<LanguageModelV4['doStream']>>> {
         const { args, warnings, metadataKey } = await this.getArgs(options);
         const untransformedBody = {
             ...args,
@@ -439,9 +454,10 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             fetch: this.config.fetch,
         });
 
-        const convertUsage = (tokenUsage: VeniceTokenUsage): LanguageModelV3Usage => this.config.convertUsage?.(tokenUsage) ?? convertVeniceChatUsage(tokenUsage);
+        const convertUsage = (tokenUsage: VeniceTokenUsage): LanguageModelV4Usage => this.config.convertUsage?.(tokenUsage) ?? convertVeniceChatUsage(tokenUsage);
 
         let toolCallTracker: StreamingToolCallTracker<VeniceStreamingToolCallDelta>;
+        let hasProducedContent = false;
 
         // Buffers tool-call deltas by `index` until `function.name` is known: some
         // OpenAI-compatible providers send the first delta without a name.
@@ -449,6 +465,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         const forwardedToolCallIndices = new Set<number>();
 
         const processToolCallDelta = (toolCallDelta: VeniceStreamingToolCallDelta) => {
+            hasProducedContent = true;
             const index = toolCallDelta.index;
 
             if (index == null || forwardedToolCallIndices.has(index)) {
@@ -496,7 +513,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
             }
         };
 
-        let finishReason: LanguageModelV3FinishReason | undefined;
+        let finishReason: LanguageModelV4FinishReason | undefined;
 
         const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
         let usage: VeniceTokenUsage;
@@ -504,6 +521,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
         let isActiveText = false;
         let isActiveReasoning = false;
         let reasoningDetails: NonNullable<VeniceChatResponse['choices'][number]['message']['reasoning_details']> = [];
+        let webSearchCitations: VeniceWebSearchCitations = [];
         let reasoningEncrypted: boolean | undefined;
         let streamThoughtSignature: string | undefined;
         let hasAttachedReasoningDetails = false;
@@ -534,7 +552,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
 
         return {
             stream: response.pipeThrough(
-                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV3StreamPart>({
+                new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV4StreamPart>({
                     start(controller) {
                         toolCallTracker = new StreamingToolCallTracker<VeniceStreamingToolCallDelta>(controller, {
                             generateId,
@@ -597,6 +615,11 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                             usage = value.usage;
                         }
 
+                        const chunkCitations = value.venice_parameters?.web_search_citations;
+                        if (chunkCitations != null && chunkCitations.length > 0) {
+                            webSearchCitations = [...webSearchCitations, ...chunkCitations];
+                        }
+
                         const choice = value.choices[0];
 
                         if (choice?.finish_reason != null) {
@@ -643,6 +666,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                 id: 'reasoning-0',
                                 delta: reasoningDelta,
                             });
+                            hasProducedContent = true;
                         };
 
                         const enqueueTextDelta = (textDelta: string) => {
@@ -666,6 +690,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                                 id: 'txt-0',
                                 delta: textDelta,
                             });
+                            hasProducedContent = true;
                         };
 
                         const reasoningContent = delta.reasoning_content ?? delta.reasoning;
@@ -703,8 +728,15 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                             controller.enqueue({ type: 'reasoning-end', id: 'reasoning-0', ...partMetadata() });
                         }
 
+                        // Citations arriving after a text block was closed by a following reasoning
+                        // block cannot be attached to that text-end; they stay in providerMetadata on finish.
                         if (isActiveText) {
-                            controller.enqueue({ type: 'text-end', id: 'txt-0', ...partMetadata() });
+                            controller.enqueue({
+                                type: 'text-end',
+                                id: 'txt-0',
+                                ...(webSearchCitations.length > 0 ? { citations: buildVeniceCitations(webSearchCitations) } : {}),
+                                ...partMetadata(),
+                            });
                         }
 
                         // Forward deltas that never received a name so the tracker keeps its
@@ -723,14 +755,16 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                         toolCallTracker.flush();
 
                         if (finishReason == null) {
-                            finishReason = { unified: 'error', raw: undefined };
-                            controller.enqueue({
-                                type: 'error',
-                                error: new InvalidResponseDataError({
-                                    data: undefined,
-                                    message: 'Response stream ended without a finish reason.',
-                                }),
-                            });
+                            finishReason = { unified: 'interrupted', raw: undefined };
+                            if (!hasProducedContent) {
+                                controller.enqueue({
+                                    type: 'error',
+                                    error: new InvalidResponseDataError({
+                                        data: undefined,
+                                        message: 'Response stream ended without a finish reason.',
+                                    }),
+                                });
+                            }
                         }
 
                         const metadata: JSONObject = {};
@@ -748,7 +782,7 @@ export class VeniceChatLanguageModel implements LanguageModelV3 {
                         }
 
                         const extractedMetadata = metadataExtractor?.buildMetadata();
-                        const providerMetadata: SharedV3ProviderMetadata = {
+                        const providerMetadata: SharedV4ProviderMetadata = {
                             ...extractedMetadata,
                             [metadataKey]: {
                                 ...(extractedMetadata?.[metadataKey] ?? {}),

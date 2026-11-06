@@ -56,13 +56,13 @@ describe('convertToVeniceChatMessages', () => {
     it('converts non-media files and validates URL protocols', () => {
         expect(
             convertToVeniceChatMessages(
-                [{ role: 'user', content: [{ type: 'file', mediaType: 'application/pdf', data: new Uint8Array([1, 2]), filename: 'doc.pdf' }] }],
+                [{ role: 'user', content: [{ type: 'file', mediaType: 'application/pdf', data: { type: 'data', data: new Uint8Array([1, 2]) }, filename: 'doc.pdf' }] }],
                 'model'
             )[0]
         ).toMatchObject({ content: [{ type: 'file', file: { file_data: 'data:application/pdf;base64,AQI=', filename: 'doc.pdf' } }] });
 
         expect(() =>
-            convertToVeniceChatMessages([{ role: 'user', content: [{ type: 'file', mediaType: 'application/pdf', data: new URL('ftp://example.com/doc.pdf') }] }], 'model')
+            convertToVeniceChatMessages([{ role: 'user', content: [{ type: 'file', mediaType: 'application/pdf', data: { type: 'url', url: new URL('ftp://example.com/doc.pdf') } }] }], 'model')
         ).toThrow(/protocol/);
     });
 
@@ -72,8 +72,8 @@ describe('convertToVeniceChatMessages', () => {
                 {
                     role: 'user',
                     content: [
-                        { type: 'file', mediaType: 'application/json', data: 'eyJoZWxsbyI6IndvcmxkIn0=', filename: 'context.json' },
-                        { type: 'file', mediaType: 'application/pdf', data: new URL('https://example.com/context.pdf?version=1') },
+                        { type: 'file', mediaType: 'application/json', data: { type: 'data', data: 'eyJoZWxsbyI6IndvcmxkIn0=' }, filename: 'context.json' },
+                        { type: 'file', mediaType: 'application/pdf', data: { type: 'url', url: new URL('https://example.com/context.pdf?version=1') } },
                     ],
                 },
             ],
@@ -86,6 +86,52 @@ describe('convertToVeniceChatMessages', () => {
                 { type: 'file', file: { file_data: 'https://example.com/context.pdf?version=1' } },
             ],
         });
+    });
+
+    it('resolves bare media types from file data bytes', () => {
+        const messages = convertToVeniceChatMessages(
+            [{ role: 'user', content: [{ type: 'file', mediaType: 'image', data: { type: 'data', data: new Uint8Array([137, 80, 78, 71]) } }] }],
+            'model'
+        );
+
+        expect(messages[0]).toMatchObject({ content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw==' } }] });
+    });
+
+    it('encodes inline text file data as a text/plain data URI', () => {
+        const messages = convertToVeniceChatMessages(
+            [{ role: 'user', content: [{ type: 'file', mediaType: 'text', data: { type: 'text', text: 'hello' }, filename: 'note.txt' }] }],
+            'model'
+        );
+
+        expect(messages[0]).toMatchObject({ content: [{ type: 'file', file: { file_data: 'data:text/plain;base64,aGVsbG8=', filename: 'note.txt' } }] });
+    });
+
+    it('rejects provider file references', () => {
+        expect(() =>
+            convertToVeniceChatMessages(
+                [{ role: 'user', content: [{ type: 'file', mediaType: 'application/pdf', data: { type: 'reference', reference: { venice: 'file-1' } } }] }],
+                'model'
+            )
+        ).toThrow(/provider file references/);
+    });
+
+    it('ignores assistant custom, reasoning-file, and tool-result parts', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'assistant',
+                    content: [
+                        { type: 'text', text: 'ok' },
+                        { type: 'custom', kind: 'venice.unknown' },
+                        { type: 'reasoning-file', mediaType: 'text/plain', data: { type: 'data', data: new Uint8Array([1]) } },
+                        { type: 'tool-result', toolCallId: 'c1', toolName: 'lookup', output: { type: 'text', value: 'ignored' } },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages).toEqual([{ role: 'assistant', tool_calls: undefined, reasoning_content: undefined, reasoning_details: undefined, content: 'ok' }]);
     });
 
     it('leaves Qwen think tags as text for Venice to interpret', () => {
@@ -255,11 +301,14 @@ describe('convertToVeniceChatMessages', () => {
     });
 
     it('supports pcm24 audio and rejects unknown audio formats', () => {
-        const messages = convertToVeniceChatMessages([{ role: 'user', content: [{ type: 'file', mediaType: 'audio/pcm24', data: new Uint8Array([1, 2]) }] }], 'model');
+        const messages = convertToVeniceChatMessages([{ role: 'user', content: [{ type: 'file', mediaType: 'audio/pcm24', data: { type: 'data', data: new Uint8Array([1, 2]) } }] }], 'model');
 
         expect(messages[0]).toMatchObject({ content: [{ type: 'input_audio', input_audio: { data: 'AQI=', format: 'pcm24' } }] });
         expect(() =>
-            convertToVeniceChatMessages([{ role: 'user', content: [{ type: 'file', mediaType: 'audio/webm', data: new Uint8Array([1]) }] }], 'model')
+            convertToVeniceChatMessages(
+                [{ role: 'user', content: [{ type: 'file', mediaType: 'audio/webm', data: { type: 'data', data: new Uint8Array([1]) } }] }],
+                'model'
+            )
         ).toThrow(/audio media type audio\/webm/);
     });
 
@@ -288,7 +337,7 @@ describe('convertToVeniceChatMessages', () => {
                         {
                             type: 'file',
                             mediaType: 'image/png',
-                            data: new Uint8Array([1, 2]),
+                            data: { type: 'data', data: new Uint8Array([1, 2]) },
                             providerOptions: { venice: { imageDetail: 'high', cache_control: { type: 'ephemeral' } } },
                         },
                     ],
@@ -312,7 +361,7 @@ describe('convertToVeniceChatMessages', () => {
                         {
                             type: 'file',
                             mediaType: 'image/png',
-                            data: new Uint8Array([1, 2]),
+                            data: { type: 'data', data: new Uint8Array([1, 2]) },
                             providerOptions: { venice: { detail: 'original' } },
                         },
                     ],
@@ -327,7 +376,7 @@ describe('convertToVeniceChatMessages', () => {
         });
     });
 
-    it('forwards venice imageDetail from tool-result image-data and image-url parts', () => {
+    it('forwards venice imageDetail from tool-result file parts', () => {
         const messages = convertToVeniceChatMessages(
             [
                 {
@@ -340,8 +389,13 @@ describe('convertToVeniceChatMessages', () => {
                             output: {
                                 type: 'content',
                                 value: [
-                                    { type: 'image-data', mediaType: 'image/png', data: 'AQI=', providerOptions: { venice: { imageDetail: 'low' } } },
-                                    { type: 'image-url', url: 'https://example.com/img.png', providerOptions: { venice: { imageDetail: 'high' } } },
+                                    { type: 'file', mediaType: 'image/png', data: { type: 'data', data: 'AQI=' }, providerOptions: { venice: { imageDetail: 'low' } } },
+                                    {
+                                        type: 'file',
+                                        mediaType: 'image',
+                                        data: { type: 'url', url: new URL('https://example.com/img.png') },
+                                        providerOptions: { venice: { imageDetail: 'high' } },
+                                    },
                                 ],
                             },
                         },

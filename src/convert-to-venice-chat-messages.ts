@@ -1,7 +1,7 @@
-import type { LanguageModelV3DataContent, LanguageModelV3Prompt, SharedV3ProviderMetadata } from '@ai-sdk/provider';
+import type { LanguageModelV4Prompt, SharedV4FileData, SharedV4ProviderMetadata } from '@ai-sdk/provider';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 
-import { convertToBase64, secureJsonParse, stringifyWithBigIntAndCycles } from '@ai-sdk/provider-utils';
+import { convertToBase64, detectMediaType, getTopLevelMediaType, isFullMediaType, secureJsonParse, stringifyWithBigIntAndCycles } from '@ai-sdk/provider-utils';
 import type {
     VeniceChatPrompt,
     VeniceContentPartAudio,
@@ -16,7 +16,9 @@ import type {
 
 const REASONING_METADATA_KEYS = ['thoughtSignature', 'thought_signature', 'reasoningDetails', 'reasoning_details', 'reasoningEncrypted', 'reasoning_encrypted'];
 
-function getVeniceMetadata(message: { providerOptions?: SharedV3ProviderMetadata }) {
+type ResolvedFileData = { data: Uint8Array | string | URL; mediaType: string };
+
+function getVeniceMetadata(message: { providerOptions?: SharedV4ProviderMetadata }) {
     const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
     const venice = message?.providerOptions?.venice ?? {};
     return { ...openaiCompatible, ...venice };
@@ -76,8 +78,46 @@ function isVeniceImageDetail(value: unknown): value is VeniceImageDetail {
     return value === 'auto' || value === 'low' || value === 'high' || value === 'original';
 }
 
-function createImageContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartImage & object {
-    const finalMediaType = mediaType === 'image/*' ? 'image/jpeg' : mediaType;
+function resolveMediaType(mediaType: string, data: ResolvedFileData['data']): string {
+    if (isFullMediaType(mediaType)) return mediaType;
+
+    const topLevelType = getTopLevelMediaType(mediaType);
+    const detected = data instanceof URL ? undefined : detectMediaType({ data, topLevelType });
+    if (detected != null && isFullMediaType(detected)) return detected;
+
+    switch (topLevelType) {
+        case 'image':
+            return 'image/jpeg';
+        case 'video':
+            return 'video/mp4';
+        case 'audio':
+            return 'audio/mpeg';
+        default:
+            return 'application/octet-stream';
+    }
+}
+
+function resolveFileData(fileData: SharedV4FileData, mediaType: string): ResolvedFileData {
+    if (fileData.type === 'reference') {
+        throw new UnsupportedFunctionalityError({
+            functionality: 'provider file references',
+            message: 'Venice does not support provider file references.',
+        });
+    }
+
+    if (fileData.type === 'text') {
+        return {
+            data: new TextEncoder().encode(fileData.text),
+            mediaType: isFullMediaType(mediaType) ? mediaType : 'text/plain',
+        };
+    }
+
+    const data = fileData.type === 'url' ? fileData.url : fileData.data;
+    return { data, mediaType: resolveMediaType(mediaType, data) };
+}
+
+function createImageContentPart(resolved: ResolvedFileData, partMetadata?: object): VeniceContentPartImage & object {
+    const { data, mediaType } = resolved;
     if (data instanceof URL && data.protocol !== 'http:' && data.protocol !== 'https:') {
         throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${data.protocol}` });
     }
@@ -88,15 +128,16 @@ function createImageContentPart(mediaType: string, data: LanguageModelV3DataCont
     return {
         type: 'image_url',
         image_url: {
-            url: data instanceof URL ? data.toString() : `data:${finalMediaType};base64,${convertToBase64(data)}`,
+            url: data instanceof URL ? data.toString() : `data:${mediaType};base64,${convertToBase64(data)}`,
             ...(isVeniceImageDetail(rawDetail) ? { detail: rawDetail } : {}),
         },
         ...restMetadata,
     };
 }
 
-function createVideoContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartVideo & object {
-    const mimeType = mediaType === 'video/*' ? 'video/mp4' : mediaType.toLowerCase();
+function createVideoContentPart(resolved: ResolvedFileData, partMetadata?: object): VeniceContentPartVideo & object {
+    const { data, mediaType } = resolved;
+    const mimeType = mediaType.toLowerCase();
     const isValidVideo = ['video/mp4', 'video/mpeg', 'video/mov', 'video/webm'].includes(mimeType);
 
     if (!isValidVideo) {
@@ -117,7 +158,8 @@ function createVideoContentPart(mediaType: string, data: LanguageModelV3DataCont
     };
 }
 
-function createAudioContentPart(mediaType: string, data: LanguageModelV3DataContent, partMetadata?: object): VeniceContentPartAudio & object {
+function createAudioContentPart(resolved: ResolvedFileData, partMetadata?: object): VeniceContentPartAudio & object {
+    const { data, mediaType } = resolved;
     if (data instanceof URL) {
         throw new UnsupportedFunctionalityError({
             functionality: 'Audio URLs are not supported. Use base64-encoded audio data.',
@@ -133,7 +175,8 @@ function createAudioContentPart(mediaType: string, data: LanguageModelV3DataCont
     };
 }
 
-function createFileContentPart(mediaType: string, data: LanguageModelV3DataContent, filename?: string, partMetadata?: object): VeniceContentPartFile & object {
+function createFileContentPart(resolved: ResolvedFileData, filename?: string, partMetadata?: object): VeniceContentPartFile & object {
+    const { data, mediaType } = resolved;
     let fileData: string;
     if (data instanceof URL) {
         if (data.protocol !== 'http:' && data.protocol !== 'https:') {
@@ -150,7 +193,21 @@ function createFileContentPart(mediaType: string, data: LanguageModelV3DataConte
     };
 }
 
-export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, modelId: string): VeniceChatPrompt {
+function createFilePartContent(part: { data: SharedV4FileData; mediaType: string; filename?: string }, partMetadata: object): VeniceUserMessageContentPart {
+    const resolved = resolveFileData(part.data, part.mediaType);
+    switch (getTopLevelMediaType(resolved.mediaType)) {
+        case 'image':
+            return createImageContentPart(resolved, partMetadata);
+        case 'audio':
+            return createAudioContentPart(resolved, partMetadata);
+        case 'video':
+            return createVideoContentPart(resolved, partMetadata);
+        default:
+            return createFileContentPart(resolved, part.filename, partMetadata);
+    }
+}
+
+export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, modelId: string): VeniceChatPrompt {
     // Claude prompt caching needs cache_control on content blocks, so Claude messages (including tool messages) always use block arrays.
     const forceContentArray = isClaudeModel(modelId);
     const messages: VeniceChatPrompt = [];
@@ -185,15 +242,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                                 return { type: 'text', text: part.text, ...partMetadata };
                             }
                             case 'file': {
-                                if (part.mediaType.startsWith('image/')) {
-                                    return createImageContentPart(part.mediaType, part.data, partMetadata);
-                                } else if (part.mediaType.startsWith('audio/')) {
-                                    return createAudioContentPart(part.mediaType, part.data, partMetadata);
-                                } else if (part.mediaType.startsWith('video/')) {
-                                    return createVideoContentPart(part.mediaType, part.data, partMetadata);
-                                } else {
-                                    return createFileContentPart(part.mediaType, part.data, part.filename, partMetadata);
-                                }
+                                return createFilePartContent(part, partMetadata);
                             }
                             default: {
                                 throw new UnsupportedFunctionalityError({
@@ -249,6 +298,17 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                                 functionality: 'assistant file content',
                             });
                         }
+                        // Venice has no wire representation for these assistant part types.
+                        case 'custom':
+                        case 'reasoning-file':
+                        case 'tool-result': {
+                            break;
+                        }
+                        default: {
+                            throw new UnsupportedFunctionalityError({
+                                functionality: `assistant content part type ${(part as { type: string }).type}`,
+                            });
+                        }
                     }
                 }
 
@@ -288,7 +348,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
 
                     // Check if output contains media (only possible with 'content' type)
                     if (output.type === 'content' && mediaUserContent.length < 20) {
-                        const hasMedia = output.value.some((part) => ['image-data', 'image-url', 'file-data', 'file-url'].includes(part.type));
+                        const hasMedia = output.value.some((part) => part.type === 'file');
 
                         if (hasMedia) {
                             // Collect all text parts into a single string
@@ -304,27 +364,8 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV3Prompt, model
                             // Collect all media parts for this tool result
                             const mediaParts: Array<VeniceUserMessageContentPart> = [];
                             for (const part of output.value) {
-                                if (part.type === 'image-data') {
-                                    mediaParts.push(createImageContentPart(part.mediaType, part.data, getVeniceMetadata(part)));
-                                } else if (part.type === 'image-url') {
-                                    mediaParts.push(createImageContentPart('image/*', new URL(part.url), getVeniceMetadata(part)));
-                                } else if (part.type === 'file-data') {
-                                    if (part.mediaType?.startsWith('video/')) {
-                                        mediaParts.push(createVideoContentPart(part.mediaType, part.data));
-                                    } else if (part.mediaType?.startsWith('audio/')) {
-                                        mediaParts.push(createAudioContentPart(part.mediaType, part.data));
-                                    } else {
-                                        mediaParts.push(createFileContentPart(part.mediaType, part.data, part.filename, getVeniceMetadata(part)));
-                                    }
-                                } else if (part.type === 'file-url') {
-                                    const url = new URL(part.url);
-                                    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-                                        throw new UnsupportedFunctionalityError({ functionality: `file URL protocol ${url.protocol}` });
-                                    } else if (url.pathname.match(/\.(mp4|mpeg|mov|webm)$/i)) {
-                                        mediaParts.push(createVideoContentPart('video/*', url));
-                                    } else {
-                                        mediaParts.push(createFileContentPart('application/octet-stream', url, undefined, getVeniceMetadata(part)));
-                                    }
+                                if (part.type === 'file') {
+                                    mediaParts.push(createFilePartContent(part, getVeniceMetadata(part)));
                                 }
                             }
 

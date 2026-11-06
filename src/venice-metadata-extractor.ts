@@ -1,12 +1,12 @@
 import type { MetadataExtractor } from '@ai-sdk/openai-compatible';
-import type { SharedV3ProviderMetadata } from '@ai-sdk/provider';
+import type { SharedV4ProviderMetadata } from '@ai-sdk/provider';
 import type { VeniceChatResponse } from './venice-response';
 
 export type { MetadataExtractor } from '@ai-sdk/openai-compatible';
 
 export function createVeniceMetadataExtractor(providerName: string): MetadataExtractor {
     return {
-        async extractMetadata({ parsedBody }: { parsedBody: unknown }): Promise<SharedV3ProviderMetadata | undefined> {
+        async extractMetadata({ parsedBody }: { parsedBody: unknown }): Promise<SharedV4ProviderMetadata | undefined> {
             const body = parsedBody as Partial<VeniceChatResponse>;
             const metadata: Record<string, unknown> = {};
 
@@ -28,7 +28,7 @@ export function createVeniceMetadataExtractor(providerName: string): MetadataExt
                 metadata.webSearchCitations = citations;
             }
 
-            return Object.keys(metadata).length > 0 ? ({ [providerName]: metadata } as SharedV3ProviderMetadata) : undefined;
+            return Object.keys(metadata).length > 0 ? ({ [providerName]: metadata } as SharedV4ProviderMetadata) : undefined;
         },
 
         createStreamExtractor: () => {
@@ -52,7 +52,7 @@ export function createVeniceMetadataExtractor(providerName: string): MetadataExt
                     }
                 },
 
-                buildMetadata(): SharedV3ProviderMetadata | undefined {
+                buildMetadata(): SharedV4ProviderMetadata | undefined {
                     const metadata: Record<string, unknown> = {};
 
                     if (cost != null) {
@@ -63,7 +63,7 @@ export function createVeniceMetadataExtractor(providerName: string): MetadataExt
                         metadata.webSearchCitations = webSearchCitations;
                     }
 
-                    return Object.keys(metadata).length > 0 ? ({ [providerName]: metadata } as SharedV3ProviderMetadata) : undefined;
+                    return Object.keys(metadata).length > 0 ? ({ [providerName]: metadata } as SharedV4ProviderMetadata) : undefined;
                 },
             };
         },

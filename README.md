@@ -4,19 +4,19 @@ The [Venice](https://venice.ai/) provider for the [Vercel AI SDK](https://sdk.ve
 
 Venice offers privacy tiers ranging from anonymized third-party routing to private zero-data-retention models, plus TEE and E2EE models. See [Venice privacy](https://docs.venice.ai/overview/privacy) for the details.
 
-> **Requires AI SDK 6** (`ai@^6`) and Node.js 24 or newer. AI SDK 7 is not supported yet.
+> **Requires AI SDK 7** (`ai@^7`) and Node.js 24 or newer. This package is ESM-only.
 
 ## Installation
 
 ```bash
 # npm
-npm install ai@^6 venice-ai-sdk-provider zod
+npm install ai@^7 venice-ai-sdk-provider zod
 
 # bun
-bun add ai@^6 venice-ai-sdk-provider zod
+bun add ai@^7 venice-ai-sdk-provider zod
 
 # pnpm
-pnpm add ai@^6 venice-ai-sdk-provider zod
+pnpm add ai@^7 venice-ai-sdk-provider zod
 ```
 
 ## Provider instance
@@ -47,14 +47,14 @@ const model = venice('venice-uncensored-1-2');
 import { generateText } from 'ai';
 import { venice } from 'venice-ai-sdk-provider';
 
-const { text, usage, providerMetadata } = await generateText({
+const { text, usage, finalStep } = await generateText({
     model: venice('venice-uncensored-1-2'),
     prompt: 'Write a vegetarian lasagna recipe for 4 people.',
 });
 
 console.log(text);
 console.log(usage.inputTokens, usage.outputTokens);
-console.log(providerMetadata?.venice?.cost);
+console.log(finalStep.providerMetadata?.venice?.cost);
 ```
 
 Streaming works the same way:
@@ -124,8 +124,10 @@ const result = await generateText({
 });
 
 console.log(result.text);
-console.log(result.providerMetadata?.venice?.webSearchCitations);
+console.log(result.finalStep.providerMetadata?.venice?.webSearchCitations);
 ```
+
+Citations are exposed both in `providerMetadata.venice.webSearchCitations` (the raw Venice payload) and on the generated text part as `citations` (`result.content` text parts, and the `text-end` stream part when streaming).
 
 `enableWebSearch` accepts `'off'`, `'on'`, or `'auto'`. `enableWebCitations` requests `^1^`-style inline citations.
 
@@ -164,6 +166,8 @@ const result = await generateText({
 ```
 
 Supported effort values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. Support is model-dependent; see [Reasoning Models](https://docs.venice.ai/guides/features/reasoning-models).
+
+The AI SDK top-level `reasoning` setting is also mapped to `reasoning_effort`; provider options take precedence when both are set.
 
 The structured form also exposes `enabled` and `summary`:
 
@@ -210,7 +214,7 @@ Without `supportsStructuredOutputs` (or `providerOptions.venice.structuredOutput
 ### Tool calling
 
 ```ts
-import { generateText, stepCountIs, tool } from 'ai';
+import { generateText, isStepCount, tool } from 'ai';
 import { z } from 'zod';
 import { venice } from 'venice-ai-sdk-provider';
 
@@ -227,7 +231,7 @@ const result = await generateText({
             },
         }),
     },
-    stopWhen: stepCountIs(2),
+    stopWhen: isStepCount(2),
     prompt: 'What is the weather like in New York?',
 });
 ```

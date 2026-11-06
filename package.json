@@ -1,11 +1,10 @@
 {
     "name": "venice-ai-sdk-provider",
-    "version": "2.3.1",
+    "version": "3.0.0-pre",
     "description": "Venice AI provider for the Vercel AI SDK",
     "license": "Apache-2.0",
     "sideEffects": false,
-    "main": "./dist/index.js",
-    "module": "./dist/index.mjs",
+    "type": "module",
     "types": "./dist/index.d.ts",
     "files": [
         "dist/**/*",
@@ -33,18 +32,19 @@
         "./package.json": "./package.json",
         ".": {
             "types": "./dist/index.d.ts",
-            "import": "./dist/index.mjs",
-            "require": "./dist/index.js"
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "^2.0.90",
-        "@ai-sdk/provider": "^3.0.19",
-        "@ai-sdk/provider-utils": "^4.0.64"
+        "@ai-sdk/openai-compatible": "3.0.86",
+        "@ai-sdk/provider": "4.0.36",
+        "@ai-sdk/provider-utils": "5.0.75"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.6.4",
         "@types/node": "^26.6.6",
+        "ai": "7.0.164",
         "husky": "^9.1.7",
         "lint-staged": "^17.6.0",
         "tsup": "^9.0.0",
@@ -53,7 +53,8 @@
         "zod": "^4.6.7"
     },
     "peerDependencies": {
-        "ai": "^6.0.322"
+        "ai": "^7.0.0",
+        "zod": "^3.25.76 || ^4.1.8"
     },
     "engines": {
         "node": ">=24"

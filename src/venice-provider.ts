@@ -1,5 +1,5 @@
 import { OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
-import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
+import type { EmbeddingModelV4, ImageModelV4, LanguageModelV4, ProviderV4 } from '@ai-sdk/provider';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from '@ai-sdk/provider-utils';
@@ -71,7 +71,7 @@ export interface VeniceProviderSettings {
     convertUsage?: VeniceChatConfig['convertUsage'];
 }
 
-export interface VeniceProvider extends ProviderV3 {
+export interface VeniceProvider extends ProviderV4 {
     (modelId: string): VeniceChatLanguageModel;
     languageModel(modelId: string, config?: Partial<VeniceChatConfig>): VeniceChatLanguageModel;
     chatModel(modelId: string, config?: Partial<VeniceChatConfig>): VeniceChatLanguageModel;
@@ -80,12 +80,12 @@ export interface VeniceProvider extends ProviderV3 {
      *
      * @throws {UnsupportedFunctionalityError} Always.
      */
-    completionModel(modelId: string): LanguageModelV3;
-    imageModel(modelId: string): ImageModelV3;
-    embeddingModel(modelId: string): EmbeddingModelV3;
+    completionModel(modelId: string): LanguageModelV4;
+    imageModel(modelId: string): ImageModelV4;
+    embeddingModel(modelId: string): EmbeddingModelV4;
 
     /** @deprecated Use `embeddingModel` instead. */
-    textEmbeddingModel(modelId: string): EmbeddingModelV3;
+    textEmbeddingModel(modelId: string): EmbeddingModelV4;
 }
 
 export function createVenice(options: VeniceProviderSettings = {}): VeniceProvider {
@@ -131,7 +131,7 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
         });
 
     const provider = (modelId: string) => createChatModel(modelId);
-    provider.specificationVersion = 'v3' as const;
+    provider.specificationVersion = 'v4' as const;
     provider.chatModel = createChatModel;
     provider.languageModel = createChatModel;
 

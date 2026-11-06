@@ -1,5 +1,5 @@
 import { InvalidResponseDataError } from '@ai-sdk/provider';
-import type { LanguageModelV3CallOptions, LanguageModelV3Content, LanguageModelV3Prompt, LanguageModelV3StreamPart, LanguageModelV3Usage } from '@ai-sdk/provider';
+import type { LanguageModelV4CallOptions, LanguageModelV4Content, LanguageModelV4Prompt, LanguageModelV4StreamPart, LanguageModelV4Usage } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { describe, expect, it } from 'vitest';
 import { convertToVeniceChatMessages } from '../src/convert-to-venice-chat-messages';
@@ -8,7 +8,7 @@ import { VeniceChatLanguageModel } from '../src/venice-chat-language-model';
 import { createVeniceMetadataExtractor } from '../src/venice-metadata-extractor';
 import { createVenice } from '../src/venice-provider';
 
-const prompt: LanguageModelV3CallOptions['prompt'] = [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }];
+const prompt: LanguageModelV4CallOptions['prompt'] = [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }];
 
 function jsonResponse(body: unknown): Response {
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -51,15 +51,15 @@ function generateBody(message: Record<string, unknown>, extra: Record<string, un
     };
 }
 
-async function collectStream(stream: ReadableStream<LanguageModelV3StreamPart>): Promise<LanguageModelV3StreamPart[]> {
-    const parts: LanguageModelV3StreamPart[] = [];
+async function collectStream(stream: ReadableStream<LanguageModelV4StreamPart>): Promise<LanguageModelV4StreamPart[]> {
+    const parts: LanguageModelV4StreamPart[] = [];
     for await (const part of stream) parts.push(part);
     return parts;
 }
 
-const types = (parts: LanguageModelV3StreamPart[]) => parts.map((part) => part.type);
+const types = (parts: LanguageModelV4StreamPart[]) => parts.map((part) => part.type);
 
-const emptyUsage = (raw: LanguageModelV3Usage['raw']): LanguageModelV3Usage => ({
+const emptyUsage = (raw: LanguageModelV4Usage['raw']): LanguageModelV4Usage => ({
     inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
     outputTokens: { total: undefined, text: undefined, reasoning: undefined },
     raw,
@@ -196,6 +196,40 @@ describe('VeniceChatLanguageModel doGenerate', () => {
         expect(body.max_completion_tokens).toBe(100);
         expect(body.venice_parameters).toMatchObject({ enable_web_search: 'on' });
         expect(result.warnings.some((warning) => warning.type === 'other')).toBe(true);
+    });
+
+    it('attaches web search citations to the last text part', async () => {
+        const { model } = createModel(() =>
+            jsonResponse(
+                generateBody(
+                    { content: 'answer' },
+                    {
+                        venice_parameters: {
+                            web_search_citations: [{ title: 'Venice', url: 'https://example.com/a', content: 'supporting passage', date: '2026-01-01' }],
+                        },
+                    }
+                )
+            )
+        );
+
+        const result = await model.doGenerate({ prompt });
+
+        const textPart = result.content.find((part) => part.type === 'text');
+        expect(textPart?.citations).toEqual([
+            {
+                source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/a', title: 'Venice' },
+                citedText: 'supporting passage',
+            },
+        ]);
+    });
+
+    it('does not add citations to text parts without web search citations', async () => {
+        const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        const result = await model.doGenerate({ prompt });
+
+        const textPart = result.content.find((part) => part.type === 'text');
+        expect(textPart).not.toHaveProperty('citations');
     });
 });
 
@@ -338,13 +372,22 @@ describe('VeniceChatLanguageModel doStream', () => {
         await expect(collectStream((await model.doStream({ prompt })).stream)).rejects.toThrow("Expected 'function.name' to be a string.");
     });
 
-    it('emits an error when the stream ends without a finish reason', async () => {
+    it('finishes an interrupted partial stream without an error part', async () => {
         const { model } = createModel(() => sseResponse({ choices: [{ delta: { content: 'answer' } }] }));
 
         const parts = await collectStream((await model.doStream({ prompt })).stream);
 
+        expect(parts.some((part) => part.type === 'error')).toBe(false);
+        expect(parts.find((part) => part.type === 'finish')).toMatchObject({ finishReason: { unified: 'interrupted' } });
+    });
+
+    it('emits an error part when the stream ends without content or a finish reason', async () => {
+        const { model } = createModel(() => sseResponse({ choices: [{ delta: {} }] }));
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
         expect(parts.some((part) => part.type === 'error')).toBe(true);
-        expect(parts.find((part) => part.type === 'finish')).toMatchObject({ finishReason: { unified: 'error' } });
+        expect(parts.find((part) => part.type === 'finish')).toMatchObject({ finishReason: { unified: 'interrupted' } });
     });
 
     it('merges extracted metadata with prediction token details on finish', async () => {
@@ -383,6 +426,33 @@ describe('VeniceChatLanguageModel doStream', () => {
         const parts = await collectStream((await model.doStream({ prompt })).stream);
 
         expect(parts.some((part) => part.type === 'error')).toBe(true);
+    });
+
+    it('attaches accumulated web search citations to the text-end part', async () => {
+        const { model } = createModel(() =>
+            sseResponse(
+                {
+                    choices: [{ delta: { content: 'answer' } }],
+                    venice_parameters: { web_search_citations: [{ title: 'First', url: 'https://example.com/1', content: 'first passage' }] },
+                },
+                {
+                    choices: [{ delta: {}, finish_reason: 'stop' }],
+                    venice_parameters: { web_search_citations: [{ title: 'Second', url: 'https://example.com/2' }] },
+                }
+            )
+        );
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
+        expect(parts.find((part) => part.type === 'text-end')).toMatchObject({
+            citations: [
+                {
+                    source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/1', title: 'First' },
+                    citedText: 'first passage',
+                },
+                { source: { type: 'source', sourceType: 'url', id: 'venice-web-search-1', url: 'https://example.com/2', title: 'Second' } },
+            ],
+        });
     });
 });
 
@@ -426,6 +496,38 @@ describe('VeniceChatLanguageModel provider options', () => {
         await model.doGenerate({ prompt, providerOptions: { venice: { reasoning_effort: 'high' } } });
 
         expect(requests[0]?.reasoning_effort).toBe('high');
+    });
+
+    it('maps the top-level reasoning option to reasoning_effort', async () => {
+        const { model, requests } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        await model.doGenerate({ prompt, reasoning: 'high' });
+
+        expect(requests[0]?.reasoning_effort).toBe('high');
+    });
+
+    it('omits reasoning_effort for the provider-default reasoning option', async () => {
+        const { model, requests } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        await model.doGenerate({ prompt, reasoning: 'provider-default' });
+
+        expect(requests[0]?.reasoning_effort).toBeUndefined();
+    });
+
+    it('lets a provider reasoning option win over the top-level reasoning option', async () => {
+        const { model, requests } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        await model.doGenerate({ prompt, reasoning: 'low', providerOptions: { venice: { reasoningEffort: 'high' } } });
+
+        expect(requests[0]?.reasoning_effort).toBe('high');
+    });
+
+    it('warns when provider options use the deprecated openai-compatible key', async () => {
+        const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        const result = await model.doGenerate({ prompt, providerOptions: { 'openai-compatible': { temperature: 0.5 } } });
+
+        expect(result.warnings).toContainEqual(expect.objectContaining({ type: 'deprecated', setting: 'openai-compatible' }));
     });
 
     it('parses camelCase provider options and uses them for metadata', async () => {
@@ -489,7 +591,7 @@ describe('VeniceChatLanguageModel provider options', () => {
                         {
                             type: 'file',
                             mediaType: 'image/png',
-                            data: new Uint8Array([1, 2]),
+                            data: { type: 'data', data: new Uint8Array([1, 2]) },
                             providerOptions: { venice: { imageDetail: 'high' } },
                         },
                     ],
@@ -562,22 +664,22 @@ describe('createVenice chat model parity', () => {
 });
 
 describe('round-trip of generated parts into the next-turn wire message', () => {
-    const userMessage: LanguageModelV3Prompt[number] = { role: 'user', content: [{ type: 'text', text: 'hi' }] };
+    const userMessage: LanguageModelV4Prompt[number] = { role: 'user', content: [{ type: 'text', text: 'hi' }] };
 
-    const toolMessage: LanguageModelV3Prompt[number] = {
+    const toolMessage: LanguageModelV4Prompt[number] = {
         role: 'tool',
         content: [{ type: 'tool-result', toolCallId: 'call-1', toolName: 'lookup', output: { type: 'text', value: 'ok' } }],
     };
 
     // Mirrors what `ai`'s toResponseMessages does: part providerMetadata becomes prompt providerOptions.
-    function toAssistantPromptMessage(content: LanguageModelV3Content[]): LanguageModelV3Prompt[number] {
+    function toAssistantPromptMessage(content: LanguageModelV4Content[]): LanguageModelV4Prompt[number] {
         return {
             role: 'assistant',
             content: content.map((part) => (part.providerMetadata == null ? part : { ...part, providerOptions: part.providerMetadata })),
-        } as LanguageModelV3Prompt[number];
+        } as LanguageModelV4Prompt[number];
     }
 
-    function convertSecondTurn(content: LanguageModelV3Content[]) {
+    function convertSecondTurn(content: LanguageModelV4Content[]) {
         const wire = convertToVeniceChatMessages([userMessage, toAssistantPromptMessage(content), toolMessage], 'test-model');
         return wire[1] as { tool_calls?: Array<{ thought_signature?: string }>; reasoning_details?: Array<{ text?: string }> };
     }

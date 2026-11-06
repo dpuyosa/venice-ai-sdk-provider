@@ -1,7 +1,7 @@
-import type { LanguageModelV3Usage } from '@ai-sdk/provider';
+import type { LanguageModelV4Usage } from '@ai-sdk/provider';
 import type { VeniceChatResponse } from './venice-response';
 
-export interface VeniceUsage extends LanguageModelV3Usage {}
+export interface VeniceUsage extends LanguageModelV4Usage {}
 
 export function convertVeniceChatUsage(usage: VeniceChatResponse['usage']): VeniceUsage {
     if (usage == null) {
