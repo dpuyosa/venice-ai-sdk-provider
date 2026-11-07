@@ -437,4 +437,110 @@ describe('convertToVeniceChatMessages', () => {
         expect(supportedUrls['audio/*']).toBeUndefined();
         expect(supportedUrls['video/*']).toBeUndefined();
     });
+
+    it('maps a part-level venice cacheControl alias to cache_control', () => {
+        const messages = convertToVeniceChatMessages(
+            [{ role: 'user', content: [{ type: 'text', text: 'hello', providerOptions: { venice: { cacheControl: { type: 'ephemeral' } } } }] }],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral' } }] });
+    });
+
+    it('passes a part-level venice cache_control through unchanged', () => {
+        const messages = convertToVeniceChatMessages(
+            [{ role: 'user', content: [{ type: 'text', text: 'hello', providerOptions: { venice: { cache_control: { type: 'ephemeral' } } } }] }],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral' } }] });
+    });
+
+    it('prefers cache_control over cacheControl within the venice namespace', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'hello',
+                            providerOptions: { venice: { cacheControl: { type: 'ephemeral' }, cache_control: { type: 'ephemeral', ttl: '1h' } } },
+                        },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral', ttl: '1h' } }] });
+    });
+
+    it('maps a message-level venice cacheControl alias to cache_control in the snake_case location', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                { role: 'system', content: 'sys', providerOptions: { venice: { cacheControl: { type: 'ephemeral' } } } },
+                { role: 'user', content: [{ type: 'text', text: 'hello' }], providerOptions: { venice: { cacheControl: { type: 'ephemeral' } } } },
+            ],
+            'model'
+        );
+
+        expect(messages).toEqual([
+            { role: 'system', content: [{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }] },
+            { role: 'user', content: 'hello', cache_control: { type: 'ephemeral' } },
+        ]);
+    });
+
+    it('lets a venice cacheControl alias beat openaiCompatible cache_control', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'hello',
+                            providerOptions: { openaiCompatible: { cache_control: { type: 'ephemeral' } }, venice: { cacheControl: { type: 'ephemeral', ttl: '1h' } } },
+                        },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral', ttl: '1h' } }] });
+    });
+
+    it('ignores cacheControl placed under the anthropic namespace', () => {
+        const messages = convertToVeniceChatMessages(
+            [{ role: 'user', content: [{ type: 'text', text: 'hello', providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } } }] }],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({ role: 'user', content: 'hello' });
+    });
+
+    it('maps an image part venice cacheControl alias to cache_control alongside imageDetail', () => {
+        const messages = convertToVeniceChatMessages(
+            [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'file',
+                            mediaType: 'image/png',
+                            data: { type: 'data', data: new Uint8Array([1, 2]) },
+                            providerOptions: { venice: { imageDetail: 'high', cacheControl: { type: 'ephemeral' } } },
+                        },
+                    ],
+                },
+            ],
+            'model'
+        );
+
+        expect(messages[0]).toEqual({
+            role: 'user',
+            content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AQI=', detail: 'high' }, cache_control: { type: 'ephemeral' } }],
+        });
+    });
 });

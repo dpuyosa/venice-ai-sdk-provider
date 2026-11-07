@@ -231,6 +231,63 @@ describe('VeniceChatLanguageModel doGenerate', () => {
         const textPart = result.content.find((part) => part.type === 'text');
         expect(textPart).not.toHaveProperty('citations');
     });
+
+    it('emits a refusal as text and maps stop to content-filter', async () => {
+        const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer', refusal: 'cannot help with that' })));
+
+        const result = await model.doGenerate({ prompt });
+
+        const textParts = result.content.filter((part) => part.type === 'text').map((part) => (part.type === 'text' ? part.text : ''));
+        expect(textParts).toContain('cannot help with that');
+        expect(result.finishReason.unified).toBe('content-filter');
+    });
+
+    it('keeps a normal stop as stop', async () => {
+        const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
+
+        const result = await model.doGenerate({ prompt });
+
+        expect(result.finishReason.unified).toBe('stop');
+    });
+
+    it('ignores a non-string refusal without throwing', async () => {
+        const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer', refusal: false })));
+
+        const result = await model.doGenerate({ prompt });
+
+        expect(result.content.filter((part) => part.type === 'text').map((part) => (part.type === 'text' ? part.text : ''))).toEqual(['answer']);
+        expect(result.finishReason.unified).toBe('stop');
+    });
+
+    it('infers tool-calls when finish_reason is null and tool calls are present', async () => {
+        const { model } = createModel(() =>
+            jsonResponse({
+                id: 'cmpl-1',
+                created: 1,
+                model: 'test-model',
+                choices: [{ index: 0, message: { role: 'assistant', tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'lookup', arguments: '{}' } }] }, finish_reason: null }],
+            })
+        );
+
+        const result = await model.doGenerate({ prompt });
+
+        expect(result.finishReason).toEqual({ unified: 'tool-calls', raw: undefined });
+    });
+
+    it('generates an id for a tool call with an empty id', async () => {
+        const { model } = createModel(() =>
+            jsonResponse(
+                generateBody({
+                    tool_calls: [{ id: '', type: 'function', function: { name: 'lookup', arguments: '{}' } }],
+                })
+            )
+        );
+
+        const result = await model.doGenerate({ prompt });
+
+        const toolPart = result.content.find((part) => part.type === 'tool-call');
+        expect(toolPart?.toolCallId).toBeTruthy();
+    });
 });
 
 describe('VeniceChatLanguageModel doStream', () => {
@@ -252,7 +309,7 @@ describe('VeniceChatLanguageModel doStream', () => {
     it('closes an active text block before a later reasoning delta', async () => {
         const { model } = createModel(() =>
             sseResponse(
-                { choices: [{ delta: { content: 'answer' } }] },
+                { id: 'cmpl-1', created: 1, model: 'test-model', choices: [{ delta: { content: 'answer' } }] },
                 { choices: [{ delta: { reasoning_content: 'rethinking' } }] },
                 { choices: [{ delta: {}, finish_reason: 'stop' }] }
             )
@@ -453,6 +510,51 @@ describe('VeniceChatLanguageModel doStream', () => {
                 { source: { type: 'source', sourceType: 'url', id: 'venice-web-search-1', url: 'https://example.com/2', title: 'Second' } },
             ],
         });
+    });
+
+    it('streams a refusal as a text delta and maps stop to content-filter', async () => {
+        const { model } = createModel(() =>
+            sseResponse({ choices: [{ delta: { refusal: 'cannot help with that' } }] }, { choices: [{ delta: {}, finish_reason: 'stop' }] })
+        );
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
+        expect(parts.filter((part) => part.type === 'text-delta').map((part) => (part.type === 'text-delta' ? part.delta : ''))).toContain('cannot help with that');
+        expect(parts.find((part) => part.type === 'finish')).toMatchObject({ finishReason: { unified: 'content-filter' } });
+    });
+
+    it('maps a refusal arriving in the same chunk as finish_reason to content-filter', async () => {
+        const { model } = createModel(() => sseResponse({ choices: [{ delta: { refusal: 'no' }, finish_reason: 'stop' }] }));
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
+        expect(parts.find((part) => part.type === 'finish')).toMatchObject({ finishReason: { unified: 'content-filter' } });
+    });
+
+    it('infers tool-calls when the stream has a complete tool call but no finish_reason', async () => {
+        const { model } = createModel(() =>
+            sseResponse({
+                choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1', type: 'function', function: { name: 'lookup', arguments: '{}' } }] } }],
+            })
+        );
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
+        expect(parts.find((part) => part.type === 'finish')).toMatchObject({ finishReason: { unified: 'tool-calls' } });
+        expect(parts.some((part) => part.type === 'error')).toBe(false);
+        expect(parts.some((part) => part.type === 'tool-call')).toBe(true);
+    });
+
+    it('emits response metadata only once it becomes available', async () => {
+        const { model } = createModel(() =>
+            sseResponse({ choices: [{ delta: { role: 'assistant' } }] }, { id: 'cmpl-9', created: 1, model: 'test-model', choices: [{ delta: {}, finish_reason: 'stop' }] })
+        );
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
+        const metadataParts = parts.filter((part) => part.type === 'response-metadata');
+        expect(metadataParts).toHaveLength(1);
+        expect(metadataParts[0]).toMatchObject({ id: 'cmpl-9', modelId: 'test-model', timestamp: new Date(1000) });
     });
 });
 

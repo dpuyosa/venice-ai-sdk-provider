@@ -1,9 +1,9 @@
 import type { LanguageModelV4FinishReason } from '@ai-sdk/provider';
 
-export function mapFinishReason(finishReason: string | null | undefined): LanguageModelV4FinishReason['unified'] {
+export function mapFinishReason(finishReason: string | null | undefined, { hasRefusal = false, hasToolCalls = false }: { hasRefusal?: boolean; hasToolCalls?: boolean } = {}): LanguageModelV4FinishReason['unified'] {
     switch (finishReason) {
         case 'stop':
-            return 'stop';
+            return hasRefusal ? 'content-filter' : 'stop';
         case 'length':
             return 'length';
         case 'content_filter':
@@ -12,6 +12,6 @@ export function mapFinishReason(finishReason: string | null | undefined): Langua
         case 'tool_calls':
             return 'tool-calls';
         default:
-            return 'other';
+            return hasToolCalls ? 'tool-calls' : 'other';
     }
 }

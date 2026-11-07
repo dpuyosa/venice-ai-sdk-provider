@@ -389,6 +389,24 @@ const result = await generateText({
 
 `promptCacheRetention` accepts `default`, `extended`, or `24h`. Cache reads and writes are reported in AI SDK usage as `usage.inputTokenDetails.cacheReadTokens` / `cacheWriteTokens`; the provider maps Venice's `cached_tokens` and `cache_creation_input_tokens` fields.
 
+### Prompt caching (Claude models)
+
+For Anthropic-family models, set `cacheControl` on a message or message part. It is emitted on the wire as `cache_control`:
+
+```ts
+const result = await generateText({
+    model: venice('claude-sonnet-5'),
+    instructions: {
+        role: 'system',
+        content: 'You are a careful assistant.',
+        providerOptions: { venice: { cacheControl: { type: 'ephemeral' } } },
+    },
+    prompt: 'Summarize the document.',
+});
+```
+
+The snake_case `cache_control` key is also accepted and is emitted as-is. Cache markers are forwarded to Anthropic-family routes on supported providers and have no effect on models that do not support prompt caching. The `ttl: '1h'` cache option is a beta feature that requires the corresponding provider header.
+
 ### Sampling and generation options
 
 In addition to the standard AI SDK settings (`temperature`, `topP`, `topK`, `presencePenalty`, `frequencyPenalty`, `stopSequences`, `seed`, `maxOutputTokens`), the provider accepts:

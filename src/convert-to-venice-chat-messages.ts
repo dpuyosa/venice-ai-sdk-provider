@@ -18,9 +18,14 @@ const REASONING_METADATA_KEYS = ['thoughtSignature', 'thought_signature', 'reaso
 
 type ResolvedFileData = { data: Uint8Array | string | URL; mediaType: string };
 
+function normalizeCacheControl(metadata: Record<string, unknown>): Record<string, unknown> {
+    const { cacheControl, ...rest } = metadata;
+    return cacheControl == null || 'cache_control' in rest ? rest : { ...rest, cache_control: cacheControl };
+}
+
 function getVeniceMetadata(message: { providerOptions?: SharedV4ProviderMetadata }) {
-    const openaiCompatible = message?.providerOptions?.openaiCompatible ?? {};
-    const venice = message?.providerOptions?.venice ?? {};
+    const openaiCompatible = normalizeCacheControl((message?.providerOptions?.openaiCompatible ?? {}) as Record<string, unknown>);
+    const venice = normalizeCacheControl((message?.providerOptions?.venice ?? {}) as Record<string, unknown>);
     return { ...openaiCompatible, ...venice };
 }
 

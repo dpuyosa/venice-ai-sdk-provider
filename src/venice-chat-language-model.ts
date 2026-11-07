@@ -362,6 +362,12 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
         const messageContent = convertVeniceContent(message.content);
         content.push(...messageContent);
 
+        const refusal = message.refusal;
+        const hasRefusal = !!refusal;
+        if (refusal) {
+            content.push({ type: 'text', text: refusal });
+        }
+
         const toolCalls = message.tool_calls ?? [];
         toolCalls.forEach((toolCall, index) => {
             const thoughtSignature = getToolCallThoughtSignature(toolCall);
@@ -379,7 +385,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
             content.push({
                 type: 'tool-call',
-                toolCallId: toolCall.id ?? generateId(),
+                toolCallId: toolCall.id || generateId(),
                 toolName: toolCall.function.name,
                 input: toolCall.function.arguments,
                 ...toProviderMetadataProps(metadataKey, toolCallMetadata),
@@ -420,7 +426,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
         return {
             content,
             finishReason: {
-                unified: mapFinishReason(choice.finish_reason) ?? 'other',
+                unified: mapFinishReason(choice.finish_reason, { hasRefusal, hasToolCalls: toolCalls.length > 0 }),
                 raw: choice.finish_reason ?? undefined,
             },
             usage: this.config.convertUsage?.(responseBody.usage) ?? convertVeniceChatUsage(responseBody.usage),
@@ -458,6 +464,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
         let toolCallTracker: StreamingToolCallTracker<VeniceStreamingToolCallDelta>;
         let hasProducedContent = false;
+        let hasToolCalls = false;
 
         // Buffers tool-call deltas by `index` until `function.name` is known: some
         // OpenAI-compatible providers send the first delta without a name.
@@ -466,6 +473,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
         const processToolCallDelta = (toolCallDelta: VeniceStreamingToolCallDelta) => {
             hasProducedContent = true;
+            hasToolCalls = true;
             const index = toolCallDelta.index;
 
             if (index == null || forwardedToolCallIndices.has(index)) {
@@ -514,10 +522,12 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
         };
 
         let finishReason: LanguageModelV4FinishReason | undefined;
+        let rawFinishReason: string | undefined;
+        let hasRefusal = false;
 
         const metadataExtractor = this.config.metadataExtractor?.createStreamExtractor();
         let usage: VeniceTokenUsage;
-        let isFirstChunk = true;
+        let metadataExtracted = false;
         let isActiveText = false;
         let isActiveReasoning = false;
         let reasoningDetails: NonNullable<VeniceChatResponse['choices'][number]['message']['reasoning_details']> = [];
@@ -602,13 +612,12 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                         // remove this workaround when the issue is fixed
                         const value = chunk.value as z.infer<typeof veniceChunkSchema>;
 
-                        if (isFirstChunk) {
-                            isFirstChunk = false;
-
-                            controller.enqueue({
-                                type: 'response-metadata',
-                                ...getResponseMetadata(value),
-                            });
+                        if (!metadataExtracted) {
+                            const metadata = getResponseMetadata(value);
+                            if (Object.values(metadata).some(Boolean)) {
+                                metadataExtracted = true;
+                                controller.enqueue({ type: 'response-metadata', ...metadata });
+                            }
                         }
 
                         if (value.usage != null) {
@@ -623,10 +632,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                         const choice = value.choices[0];
 
                         if (choice?.finish_reason != null) {
-                            finishReason = {
-                                unified: mapFinishReason(choice.finish_reason) ?? 'other',
-                                raw: choice.finish_reason,
-                            };
+                            rawFinishReason = choice.finish_reason;
                         }
 
                         if (choice?.delta == null) {
@@ -706,6 +712,11 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                             }
                         }
 
+                        if (delta.refusal) {
+                            enqueueTextDelta(delta.refusal);
+                            hasRefusal = true;
+                        }
+
                         if (delta.tool_calls != null && delta.tool_calls.length > 0) {
                             // end active reasoning block before tool calls start
                             if (isActiveReasoning) {
@@ -753,6 +764,10 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                         pendingToolCalls.clear();
 
                         toolCallTracker.flush();
+
+                        if (finishReason == null && (rawFinishReason != null || hasToolCalls)) {
+                            finishReason = { unified: mapFinishReason(rawFinishReason, { hasRefusal, hasToolCalls }), raw: rawFinishReason };
+                        }
 
                         if (finishReason == null) {
                             finishReason = { unified: 'interrupted', raw: undefined };

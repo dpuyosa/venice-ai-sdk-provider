@@ -100,6 +100,48 @@ describe('ai@7 integration', () => {
         );
     });
 
+    it('forwards a venice cacheControl alias as cache_control on a text part', async () => {
+        const { provider, requests } = createTestProvider(() => jsonResponse(generateBody({ content: 'ok' })));
+
+        await generateText({
+            model: provider('test-model'),
+            messages: [
+                {
+                    role: 'user',
+                    content: [{ type: 'text', text: 'cache this', providerOptions: { venice: { cacheControl: { type: 'ephemeral' } } } }],
+                },
+            ],
+        });
+
+        const messages = requests[0]?.messages as Array<{ content: Array<{ type: string; cache_control?: unknown; cacheControl?: unknown }> }>;
+        const textPart = messages[0]?.content.find((part) => part.type === 'text');
+
+        expect(textPart?.cache_control).toEqual({ type: 'ephemeral' });
+        expect(textPart).not.toHaveProperty('cacheControl');
+    });
+
+    it('forwards venice cacheControl from instructions as cache_control on the system message', async () => {
+        const { provider, requests } = createTestProvider(() => jsonResponse(generateBody({ content: 'ok' })));
+
+        await generateText({
+            model: provider('test-model'),
+            instructions: {
+                role: 'system',
+                content: 'You are a careful assistant.',
+                providerOptions: { venice: { cacheControl: { type: 'ephemeral' } } },
+            },
+            prompt: 'Summarize the document.',
+        });
+
+        type CapturedMessage = { role: string; content: Array<{ type: string; text?: string; cache_control?: unknown; cacheControl?: unknown }> };
+        const messages = requests[0]?.messages as CapturedMessage[];
+        const systemMessage = messages.find((message) => message.role === 'system');
+        const textPart = systemMessage?.content.find((part) => part.type === 'text');
+
+        expect(textPart?.cache_control).toEqual({ type: 'ephemeral' });
+        expect(textPart).not.toHaveProperty('cacheControl');
+    });
+
     it('forwards the top-level reasoning option as reasoning_effort', async () => {
         const { provider, requests } = createTestProvider(() => jsonResponse(generateBody({ content: 'Thinking' })));
 

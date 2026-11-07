@@ -76,6 +76,12 @@ const veniceResponseParametersSchema = z
     })
     .nullish();
 
+// Some providers send non-string refusals; tolerate them by dropping the value.
+const veniceRefusalSchema = z
+    .unknown()
+    .nullish()
+    .transform((value) => (typeof value === 'string' ? value : undefined));
+
 export const VeniceChatResponseSchema = z.looseObject({
     id: z.string().nullish(),
     object: z.string().nullish(),
@@ -92,7 +98,7 @@ export const VeniceChatResponseSchema = z.looseObject({
                 name: z.string().nullish(),
                 content: veniceContentSchema,
                 thought_signature: z.string().nullish(),
-                refusal: z.string().nullish(),
+                refusal: veniceRefusalSchema,
                 annotations: z.array(z.any()).nullish(),
                 audio: z.any().nullish(),
                 function_call: z.any().nullish(),
@@ -141,6 +147,7 @@ export const veniceChunkSchema = z.looseObject({
                 .object({
                     role: z.enum(['assistant', '']).nullish(),
                     content: veniceContentSchema,
+                    refusal: veniceRefusalSchema,
                     thought_signature: z.string().nullish(),
                     // Most openai-compatible models set `reasoning_content`, but some
                     // providers serving `gpt-oss` set `reasoning`. See #7866
