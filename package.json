@@ -38,14 +38,14 @@
         }
     },
     "dependencies": {
-        "@ai-sdk/openai-compatible": "3.0.86",
-        "@ai-sdk/provider": "4.0.36",
-        "@ai-sdk/provider-utils": "5.0.75"
+        "@ai-sdk/openai-compatible": "3.0.87",
+        "@ai-sdk/provider": "4.0.37",
+        "@ai-sdk/provider-utils": "5.0.76"
     },
     "devDependencies": {
-        "@biomejs/biome": "^2.6.4",
+        "@biomejs/biome": "^2.6.6",
         "@types/node": "^26.6.6",
-        "ai": "7.0.164",
+        "ai": "7.0.165",
         "husky": "^9.1.7",
         "lint-staged": "^17.6.0",
         "tsup": "^9.0.0",
@@ -54,7 +54,7 @@
         "zod": "^4.6.7"
     },
     "peerDependencies": {
-        "ai": "^7.0.0",
+        "ai": "^7.0.165",
         "zod": "^3.25.76 || ^4.1.8"
     },
     "engines": {
