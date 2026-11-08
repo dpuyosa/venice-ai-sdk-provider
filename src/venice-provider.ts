@@ -1,12 +1,16 @@
-import { OpenAICompatibleEmbeddingModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible';
-import type { EmbeddingModelV4, ImageModelV4, LanguageModelV4, ProviderV4 } from '@ai-sdk/provider';
+import { OpenAICompatibleEmbeddingModel } from '@ai-sdk/openai-compatible';
+import type { EmbeddingModelV4, Experimental_DecisionModelV4, ImageModelV4, LanguageModelV4, ProviderV4, SpeechModelV4, TranscriptionModelV4 } from '@ai-sdk/provider';
 import { UnsupportedFunctionalityError } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash, withUserAgentSuffix } from '@ai-sdk/provider-utils';
 import type { VeniceChatConfig } from './venice-chat-language-model';
 import { VeniceChatLanguageModel } from './venice-chat-language-model';
+import { VeniceDecisionModel } from './venice-decision-model';
+import { VeniceImageModel } from './venice-image-model';
 import type { MetadataExtractor } from './venice-metadata-extractor';
 import { createVeniceMetadataExtractor } from './venice-metadata-extractor';
+import { VeniceSpeechModel } from './venice-speech-model';
+import { VeniceTranscriptionModel } from './venice-transcription-model';
 import { VERSION } from './version';
 
 export interface VeniceProviderSettings {
@@ -82,6 +86,9 @@ export interface VeniceProvider extends ProviderV4 {
      */
     completionModel(modelId: string): LanguageModelV4;
     imageModel(modelId: string): ImageModelV4;
+    speechModel(modelId: string): SpeechModelV4;
+    transcriptionModel(modelId: string): TranscriptionModelV4;
+    decisionModel(modelId: string): Experimental_DecisionModelV4;
     embeddingModel(modelId: string): EmbeddingModelV4;
 
     /** @deprecated Use `embeddingModel` instead. */
@@ -141,7 +148,10 @@ export function createVenice(options: VeniceProviderSettings = {}): VeniceProvid
             message: "Venice does not implement the legacy '/completions' endpoint. Use 'chatModel' or 'languageModel' instead.",
         });
     };
-    provider.imageModel = (modelId: string) => new OpenAICompatibleImageModel(modelId, getModelConfig('image'));
+    provider.imageModel = (modelId: string) => new VeniceImageModel(modelId, getModelConfig('image'));
+    provider.speechModel = (modelId: string) => new VeniceSpeechModel(modelId, getModelConfig('speech'));
+    provider.transcriptionModel = (modelId: string) => new VeniceTranscriptionModel(modelId, getModelConfig('transcription'));
+    provider.decisionModel = (modelId: string) => new VeniceDecisionModel(modelId, getModelConfig('decision'));
     provider.embeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getModelConfig('embedding'));
     provider.textEmbeddingModel = (modelId: string) => new OpenAICompatibleEmbeddingModel(modelId, getModelConfig('embedding'));
 

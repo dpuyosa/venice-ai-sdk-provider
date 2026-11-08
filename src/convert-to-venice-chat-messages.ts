@@ -23,9 +23,9 @@ function normalizeCacheControl(metadata: Record<string, unknown>): Record<string
     return cacheControl == null || 'cache_control' in rest ? rest : { ...rest, cache_control: cacheControl };
 }
 
-function getVeniceMetadata(message: { providerOptions?: SharedV4ProviderMetadata }) {
+function getVeniceMetadata(message: { providerOptions?: SharedV4ProviderMetadata }, providerOptionsName = 'venice') {
     const openaiCompatible = normalizeCacheControl((message?.providerOptions?.openaiCompatible ?? {}) as Record<string, unknown>);
-    const venice = normalizeCacheControl((message?.providerOptions?.venice ?? {}) as Record<string, unknown>);
+    const venice = normalizeCacheControl((message?.providerOptions?.[providerOptionsName] ?? {}) as Record<string, unknown>);
     return { ...openaiCompatible, ...venice };
 }
 
@@ -212,14 +212,14 @@ function createFilePartContent(part: { data: SharedV4FileData; mediaType: string
     }
 }
 
-export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, modelId: string): VeniceChatPrompt {
+export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, modelId: string, providerOptionsName = 'venice'): VeniceChatPrompt {
     // Claude prompt caching needs cache_control on content blocks, so Claude messages (including tool messages) always use block arrays.
     const forceContentArray = isClaudeModel(modelId);
     const messages: VeniceChatPrompt = [];
     for (const { role, content, providerOptions } of prompt) {
         switch (role) {
             case 'system': {
-                const partMetadata = getVeniceMetadata({ providerOptions });
+                const partMetadata = getVeniceMetadata({ providerOptions }, providerOptionsName);
                 messages.push({
                     role: 'system',
                     content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content, ...partMetadata }] : content,
@@ -229,11 +229,11 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
 
             case 'user': {
                 if (content.length === 1 && content[0]?.type === 'text') {
-                    const partMetadata = getVeniceMetadata(content[0]);
+                    const partMetadata = getVeniceMetadata(content[0], providerOptionsName);
                     messages.push({
                         role: 'user',
                         content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: content[0].text, ...partMetadata }] : content[0].text,
-                        ...getVeniceMetadata({ providerOptions }),
+                        ...getVeniceMetadata({ providerOptions }, providerOptionsName),
                     });
                     break;
                 }
@@ -241,7 +241,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                 messages.push({
                     role: 'user',
                     content: content.map((part) => {
-                        const partMetadata = getVeniceMetadata(part);
+                        const partMetadata = getVeniceMetadata(part, providerOptionsName);
                         switch (part.type) {
                             case 'text': {
                                 return { type: 'text', text: part.text, ...partMetadata };
@@ -256,7 +256,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                             }
                         }
                     }),
-                    ...getVeniceMetadata({ providerOptions }),
+                    ...getVeniceMetadata({ providerOptions }, providerOptionsName),
                 });
                 break;
             }
@@ -270,7 +270,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                 const toolCalls: VeniceMessageToolCall[] = [];
 
                 for (const part of content) {
-                    const partMetadata = getVeniceMetadata(part);
+                    const partMetadata = getVeniceMetadata(part, providerOptionsName);
                     switch (part.type) {
                         case 'text': {
                             assistantText += part.text;
@@ -317,7 +317,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                     }
                 }
 
-                const messageMetadata = getVeniceMetadata({ providerOptions });
+                const messageMetadata = getVeniceMetadata({ providerOptions }, providerOptionsName);
                 reasoningDetails.push(...readReasoningDetails(messageMetadata));
                 messageThoughtSignature = readThoughtSignature(messageMetadata) ?? messageThoughtSignature;
 
@@ -348,7 +348,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                         continue;
                     }
 
-                    const partMetadata = getVeniceMetadata(toolResponse);
+                    const partMetadata = getVeniceMetadata(toolResponse, providerOptionsName);
                     const output = toolResponse.output;
 
                     // Check if output contains media (only possible with 'content' type)
@@ -370,7 +370,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                             const mediaParts: Array<VeniceUserMessageContentPart> = [];
                             for (const part of output.value) {
                                 if (part.type === 'file') {
-                                    mediaParts.push(createFilePartContent(part, getVeniceMetadata(part)));
+                                    mediaParts.push(createFilePartContent(part, getVeniceMetadata(part, providerOptionsName)));
                                 }
                             }
 
@@ -386,7 +386,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                                     role: 'tool',
                                     tool_call_id: toolResponse.toolCallId,
                                     content: textOnlyContent,
-                                    ...getVeniceMetadata({ providerOptions }),
+                                    ...getVeniceMetadata({ providerOptions }, providerOptionsName),
                                 });
 
                                 continue; // Skip creating individual tool message
@@ -417,7 +417,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                         role: 'tool',
                         tool_call_id: toolResponse.toolCallId,
                         content: forceContentArray || Object.keys(partMetadata).length > 0 ? [{ type: 'text', text: contentValue, ...partMetadata }] : contentValue,
-                        ...getVeniceMetadata({ providerOptions }),
+                        ...getVeniceMetadata({ providerOptions }, providerOptionsName),
                     });
                 }
 
@@ -426,7 +426,7 @@ export function convertToVeniceChatMessages(prompt: LanguageModelV4Prompt, model
                     messages.push({
                         role: 'user',
                         content: mediaUserContent,
-                        ...getVeniceMetadata({ providerOptions }),
+                        ...getVeniceMetadata({ providerOptions }, providerOptionsName),
                     });
                 }
 

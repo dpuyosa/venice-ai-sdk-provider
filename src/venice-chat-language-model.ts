@@ -7,14 +7,24 @@ import type {
     LanguageModelV4Content,
     LanguageModelV4FinishReason,
     LanguageModelV4StreamPart,
-    LanguageModelV4Text,
     LanguageModelV4Usage,
     SharedV4ProviderMetadata,
     SharedV4Warning,
 } from '@ai-sdk/provider';
 import { InvalidResponseDataError } from '@ai-sdk/provider';
-import type { FetchFunction, ParseResult, ResponseHandler, StreamingToolCallDelta } from '@ai-sdk/provider-utils';
-import { combineHeaders, createEventSourceResponseHandler, createJsonErrorResponseHandler, createJsonResponseHandler, generateId, parseProviderOptions, postJsonToApi, StreamingToolCallTracker } from '@ai-sdk/provider-utils';
+import type { FetchFunction, ParseResult, Resolvable, ResponseHandler, StreamingToolCallDelta } from '@ai-sdk/provider-utils';
+import {
+    createEventSourceResponseHandler,
+    createJsonErrorResponseHandler,
+    createJsonResponseHandler,
+    generateId,
+    parseProviderOptions,
+    postJsonToApi,
+    StreamingToolCallTracker,
+    serializeModelOptions,
+    WORKFLOW_DESERIALIZE,
+    WORKFLOW_SERIALIZE,
+} from '@ai-sdk/provider-utils';
 import type { z } from 'zod/v4';
 import { convertToVeniceChatMessages } from './convert-to-venice-chat-messages';
 import { getResponseMetadata } from './get-response-metadata';
@@ -23,9 +33,10 @@ import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
 import { convertVeniceChatUsage } from './venice-chat-usage';
 import type { VeniceWebSearchCitations } from './venice-citations';
-import { buildVeniceCitations } from './venice-citations';
+import { buildVeniceSources } from './venice-citations';
 import { defaultVeniceErrorStructure, getVeniceErrorMessage } from './venice-error';
 import type { MetadataExtractor } from './venice-metadata-extractor';
+import { resolveRequestHeaders, toCamelCase } from './venice-model-config';
 import { prepareVeniceParameters } from './venice-prepare-parameters';
 import { prepareTools } from './venice-prepare-tools';
 import type { VeniceChatResponse, VeniceContent, VeniceTokenUsage, veniceChunkSchema } from './venice-response';
@@ -57,7 +68,7 @@ function toProviderMetadataProps(metadataKey: string, metadata: JSONObject): { p
 
 export interface VeniceChatConfig {
     provider: string;
-    headers: () => Record<string, string | undefined>;
+    headers: Resolvable<Record<string, string | undefined>>;
     url: (options: { modelId: string; path: string }) => string;
     fetch?: FetchFunction;
     includeUsage?: boolean;
@@ -68,10 +79,6 @@ export interface VeniceChatConfig {
     metadataExtractor?: MetadataExtractor;
     transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>;
     convertUsage?: (usage: VeniceTokenUsage) => LanguageModelV4Usage;
-}
-
-function toCamelCase(str: string): string {
-    return str.replace(/[_-]([a-z])/g, (group) => group.charAt(1).toUpperCase());
 }
 
 /**
@@ -139,6 +146,17 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
     private readonly successfulEventResponseHandler: ResponseHandler<ReadableStream>;
     private readonly chunkSchema;
 
+    static [WORKFLOW_SERIALIZE](model: VeniceChatLanguageModel) {
+        return serializeModelOptions({
+            modelId: model.modelId,
+            config: model.config,
+        });
+    }
+
+    static [WORKFLOW_DESERIALIZE](options: { modelId: string; config: VeniceChatConfig }) {
+        return new VeniceChatLanguageModel(options.modelId, options.config);
+    }
+
     constructor(modelId: string, config: VeniceChatConfig) {
         this.modelId = modelId;
         this.config = config;
@@ -157,7 +175,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
     }
 
     private get providerOptionsName(): string {
-        return this.config.provider?.split('.')[0]?.trim() ?? 'venice';
+        return this.config.provider?.split('.')[0]?.trim() || 'venice';
     }
 
     get supportedUrls() {
@@ -300,7 +318,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
             tool_choice: veniceToolChoice,
             tools: veniceTools,
 
-            messages: convertToVeniceChatMessages(options.prompt, this.modelId),
+            messages: convertToVeniceChatMessages(options.prompt, this.modelId, this.providerOptionsName),
 
             ...passthroughOptions,
         };
@@ -323,7 +341,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
             rawValue: rawResponse,
         } = await postJsonToApi({
             url: this.config.url({ path: '/chat/completions', modelId: this.modelId }),
-            headers: combineHeaders(this.config.headers(), options.headers),
+            headers: await resolveRequestHeaders(this.config.headers, options.headers),
             body,
             failedResponseHandler: this.failedResponseHandler,
             successfulResponseHandler: this.successfulResponseHandler,
@@ -394,10 +412,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
         const webSearchCitations = responseBody.venice_parameters?.web_search_citations;
         if (webSearchCitations != null && webSearchCitations.length > 0) {
-            const lastTextPart = content.findLast((part): part is LanguageModelV4Text => part.type === 'text');
-            if (lastTextPart != null) {
-                lastTextPart.citations = buildVeniceCitations(webSearchCitations);
-            }
+            content.push(...buildVeniceSources(webSearchCitations));
         }
 
         if (!hasReasoningPart && toolCalls.length === 0 && messageThoughtSignature != null) {
@@ -452,7 +467,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
         const { responseHeaders, value: response } = await postJsonToApi({
             url: this.config.url({ path: '/chat/completions', modelId: this.modelId }),
-            headers: combineHeaders(this.config.headers(), options.headers),
+            headers: await resolveRequestHeaders(this.config.headers, options.headers),
             body,
             failedResponseHandler: this.failedResponseHandler,
             successfulResponseHandler: this.successfulEventResponseHandler,
@@ -560,6 +575,15 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
         const partMetadata = () => toProviderMetadataProps(metadataKey, takePartMetadata());
 
+        const emittedSourceIds = new Set<string>();
+        const enqueueNewSources = (controller: TransformStreamDefaultController<LanguageModelV4StreamPart>) => {
+            for (const source of buildVeniceSources(webSearchCitations)) {
+                if (emittedSourceIds.has(source.id)) continue;
+                emittedSourceIds.add(source.id);
+                controller.enqueue(source);
+            }
+        };
+
         return {
             stream: response.pipeThrough(
                 new TransformStream<ParseResult<z.infer<typeof this.chunkSchema>>, LanguageModelV4StreamPart>({
@@ -627,6 +651,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                         const chunkCitations = value.venice_parameters?.web_search_citations;
                         if (chunkCitations != null && chunkCitations.length > 0) {
                             webSearchCitations = [...webSearchCitations, ...chunkCitations];
+                            enqueueNewSources(controller);
                         }
 
                         const choice = value.choices[0];
@@ -728,6 +753,11 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                                 isActiveReasoning = false;
                             }
 
+                            if (isActiveText) {
+                                controller.enqueue({ type: 'text-end', id: 'txt-0' });
+                                isActiveText = false;
+                            }
+
                             for (const toolCallDelta of delta.tool_calls) {
                                 processToolCallDelta(toolCallDelta);
                             }
@@ -739,15 +769,8 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                             controller.enqueue({ type: 'reasoning-end', id: 'reasoning-0', ...partMetadata() });
                         }
 
-                        // Citations arriving after a text block was closed by a following reasoning
-                        // block cannot be attached to that text-end; they stay in providerMetadata on finish.
                         if (isActiveText) {
-                            controller.enqueue({
-                                type: 'text-end',
-                                id: 'txt-0',
-                                ...(webSearchCitations.length > 0 ? { citations: buildVeniceCitations(webSearchCitations) } : {}),
-                                ...partMetadata(),
-                            });
+                            controller.enqueue({ type: 'text-end', id: 'txt-0', ...partMetadata() });
                         }
 
                         // Forward deltas that never received a name so the tracker keeps its
