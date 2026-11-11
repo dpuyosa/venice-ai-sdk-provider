@@ -2,7 +2,7 @@
 
 The [Venice](https://venice.ai/) provider for the [Vercel AI SDK](https://ai-sdk.dev/docs) connects your app to Venice's OpenAI-compatible API. Use it with `generateText`, `streamText`, structured output, and tool calling, plus image, speech, transcription, embedding, and decision models.
 
-> **Requires AI SDK 7** (`ai@^7`) and Node.js 24 or newer. This package is ESM-only.
+> **Requires AI SDK 7** (`ai@^7`). This package is ESM-only.
 
 ## Setup
 
@@ -111,9 +111,20 @@ const result = await generateText({
 
 console.log(result.text);
 console.log(result.sources);
+
+for (const part of result.content) {
+    if (part.type === 'text') {
+        console.log(part.citations);
+    }
+}
 ```
 
-Venice returns retrieved web sources, and the provider exposes them as AI SDK URL `source` parts. Use `result.sources` (or `step.sources`, or `source` parts in `fullStream`). Duplicate URLs are emitted once. The raw citations remain available as `result.providerMetadata?.venice?.webSearchCitations`.
+The provider exposes Venice web-search references in two documented AI SDK forms:
+
+- **Retrieved sources:** URL `source` parts are available through `result.sources` (or `step.sources`, or `source` parts in `fullStream`). Duplicate URLs are emitted once as sources.
+- **Text citations:** references supporting the generated text are attached to the text part as `part.citations`. With `streamText`, they appear on `text-end` events and are preserved on text parts in the completed `result.content`. Unlike sources, citation entries are not deduplicated; every original Venice citation entry and index is retained.
+
+Each citation contains its URL `source` and, when supplied by Venice, a `citedText` supporting passage. Venice does not provide generated-text offsets, so `startIndex` and `endIndex` are omitted. Inline markers such as `^1^` remain unchanged in the generated text. The raw citations remain available as `result.providerMetadata?.venice?.webSearchCitations`.
 
 `enableWebSearch` accepts `'off'`, `'on'`, or `'auto'`.
 

@@ -156,7 +156,7 @@ describe('Venice live API contract', () => {
     }, LIVE_TIMEOUT_MS);
 
     it('executes a tool call and answers in a second step', async () => {
-        const modelId = await resolveTextModel(process.env.VENICE_E2E_TOOL_MODEL, (model) => model.model_spec?.capabilities?.supportsFunctionCalling === true);
+        const modelId = 'function_calling_default';
 
         const executed: Array<{ value: number }> = [];
         const result = await generateText({

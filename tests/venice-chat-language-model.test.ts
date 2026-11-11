@@ -222,15 +222,25 @@ describe('VeniceChatLanguageModel doGenerate', () => {
             title: 'Venice',
             providerMetadata: { venice: { content: 'supporting passage', date: '2026-01-01' } },
         });
-        expect(result.content.find((part) => part.type === 'text')).not.toHaveProperty('citations');
+        expect(result.content.find((part) => part.type === 'text')).toEqual({
+            type: 'text',
+            text: 'answer ^1^',
+            citations: [
+                {
+                    source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/a', title: 'Venice' },
+                    citedText: 'supporting passage',
+                },
+            ],
+        });
     });
 
-    it('does not add source parts without web search citations', async () => {
+    it('does not add source parts or citations without web search citations', async () => {
         const { model } = createModel(() => jsonResponse(generateBody({ content: 'answer' })));
 
         const result = await model.doGenerate({ prompt });
 
         expect(result.content.some((part) => part.type === 'source')).toBe(false);
+        expect(result.content.find((part) => part.type === 'text')).toEqual({ type: 'text', text: 'answer' });
     });
 
     it('omits provider metadata when citations have no content or date', async () => {
@@ -265,6 +275,18 @@ describe('VeniceChatLanguageModel doGenerate', () => {
         const sources = result.content.filter((part) => part.type === 'source');
         expect(sources).toHaveLength(1);
         expect(sources[0]).toMatchObject({ url: 'https://example.com/a', title: 'Venice' });
+
+        const textPart = result.content.find((part) => part.type === 'text');
+        expect(textPart).toHaveProperty('citations', [
+            {
+                source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/a', title: 'Venice' },
+                citedText: 'first',
+            },
+            {
+                source: { type: 'source', sourceType: 'url', id: 'venice-web-search-1', url: 'https://example.com/a', title: 'Venice again' },
+                citedText: 'second',
+            },
+        ]);
     });
 
     it('emits a refusal as text and maps stop to content-filter', async () => {
@@ -547,7 +569,17 @@ describe('VeniceChatLanguageModel doStream', () => {
             },
             { type: 'source', sourceType: 'url', id: 'venice-web-search-1', url: 'https://example.com/2', title: 'Second' },
         ]);
-        expect(parts.find((part) => part.type === 'text-end')).not.toHaveProperty('citations');
+        expect(parts.find((part) => part.type === 'text-end')).toEqual({
+            type: 'text-end',
+            id: 'txt-0',
+            citations: [
+                {
+                    source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/1', title: 'First' },
+                    citedText: 'first passage',
+                },
+                { source: { type: 'source', sourceType: 'url', id: 'venice-web-search-1', url: 'https://example.com/2', title: 'Second' } },
+            ],
+        });
     });
 
     it('does not duplicate source stream parts for repeated citations', async () => {
@@ -582,8 +614,46 @@ describe('VeniceChatLanguageModel doStream', () => {
         const parts = await collectStream((await model.doStream({ prompt })).stream);
 
         expect(parts.find((part) => part.type === 'source')).toMatchObject({ url: 'https://example.com/1', title: 'First' });
-        expect(parts.find((part) => part.type === 'text-end')).not.toHaveProperty('citations');
+        expect(parts.find((part) => part.type === 'text-end')).toEqual({
+            type: 'text-end',
+            id: 'txt-0',
+            citations: [
+                {
+                    source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/1', title: 'First' },
+                    citedText: 'first passage',
+                },
+            ],
+        });
         expect(parts.some((part) => part.type === 'tool-call')).toBe(true);
+    });
+
+    it('does not attach late citations to an already emitted text-end', async () => {
+        const { model } = createModel(() =>
+            sseResponse(
+                { choices: [{ delta: { content: 'answer' } }] },
+                { choices: [{ delta: { reasoning_content: 'rethinking' } }] },
+                {
+                    choices: [{ delta: {} }],
+                    venice_parameters: { web_search_citations: [{ title: 'Late', url: 'https://example.com/late', content: 'late passage' }] },
+                },
+                { choices: [{ delta: {}, finish_reason: 'stop' }] }
+            )
+        );
+
+        const parts = await collectStream((await model.doStream({ prompt })).stream);
+
+        expect(parts.filter((part) => part.type === 'text-start')).toHaveLength(1);
+        expect(parts.filter((part) => part.type === 'text-end')).toEqual([{ type: 'text-end', id: 'txt-0' }]);
+        expect(parts.filter((part) => part.type === 'source')).toEqual([
+            {
+                type: 'source',
+                sourceType: 'url',
+                id: 'venice-web-search-0',
+                url: 'https://example.com/late',
+                title: 'Late',
+                providerMetadata: { venice: { content: 'late passage' } },
+            },
+        ]);
     });
 
     it('streams a refusal as a text delta and maps stop to content-filter', async () => {

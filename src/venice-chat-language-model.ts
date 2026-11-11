@@ -7,6 +7,7 @@ import type {
     LanguageModelV4Content,
     LanguageModelV4FinishReason,
     LanguageModelV4StreamPart,
+    LanguageModelV4Text,
     LanguageModelV4Usage,
     SharedV4ProviderMetadata,
     SharedV4Warning,
@@ -33,7 +34,7 @@ import type { VeniceLanguageModelOptions } from './venice-chat-options';
 import { veniceLanguageModelOptionsSchema } from './venice-chat-options';
 import { convertVeniceChatUsage } from './venice-chat-usage';
 import type { VeniceWebSearchCitations } from './venice-citations';
-import { buildVeniceSources } from './venice-citations';
+import { buildVeniceCitations, buildVeniceSources } from './venice-citations';
 import { defaultVeniceErrorStructure, getVeniceErrorMessage } from './venice-error';
 import type { MetadataExtractor } from './venice-metadata-extractor';
 import { resolveRequestHeaders, toCamelCase } from './venice-model-config';
@@ -413,6 +414,11 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
         const webSearchCitations = responseBody.venice_parameters?.web_search_citations;
         if (webSearchCitations != null && webSearchCitations.length > 0) {
             content.push(...buildVeniceSources(webSearchCitations));
+
+            const lastTextPart = content.findLast((part): part is LanguageModelV4Text => part.type === 'text');
+            if (lastTextPart != null) {
+                lastTextPart.citations = buildVeniceCitations(webSearchCitations);
+            }
         }
 
         if (!hasReasoningPart && toolCalls.length === 0 && messageThoughtSignature != null) {
@@ -574,6 +580,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
         };
 
         const partMetadata = () => toProviderMetadataProps(metadataKey, takePartMetadata());
+        const citationProps = () => (webSearchCitations.length > 0 ? { citations: buildVeniceCitations(webSearchCitations) } : {});
 
         const emittedSourceIds = new Set<string>();
         const enqueueNewSources = (controller: TransformStreamDefaultController<LanguageModelV4StreamPart>) => {
@@ -680,7 +687,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
 
                         const enqueueReasoningDelta = (reasoningDelta: string) => {
                             if (isActiveText) {
-                                controller.enqueue({ type: 'text-end', id: 'txt-0' });
+                                controller.enqueue({ type: 'text-end', id: 'txt-0', ...citationProps() });
                                 isActiveText = false;
                             }
 
@@ -754,7 +761,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                             }
 
                             if (isActiveText) {
-                                controller.enqueue({ type: 'text-end', id: 'txt-0' });
+                                controller.enqueue({ type: 'text-end', id: 'txt-0', ...citationProps() });
                                 isActiveText = false;
                             }
 
@@ -770,7 +777,7 @@ export class VeniceChatLanguageModel implements LanguageModelV4 {
                         }
 
                         if (isActiveText) {
-                            controller.enqueue({ type: 'text-end', id: 'txt-0', ...partMetadata() });
+                            controller.enqueue({ type: 'text-end', id: 'txt-0', ...citationProps(), ...partMetadata() });
                         }
 
                         // Forward deltas that never received a name so the tracker keeps its

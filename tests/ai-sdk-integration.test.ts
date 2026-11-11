@@ -187,7 +187,12 @@ describe('ai@7 integration', () => {
             },
         ]);
         expect(result.content).toContainEqual(expect.objectContaining({ type: 'source', url: 'https://example.com/venice' }));
-        expect(result.content.find((part) => part.type === 'text')).not.toHaveProperty('citations');
+        expect(result.content.find((part) => part.type === 'text')).toHaveProperty('citations', [
+            {
+                source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/venice', title: 'Venice flooding' },
+                citedText: 'Acqua alta',
+            },
+        ]);
     });
 
     it('exposes streamed web search citations as source parts', async () => {
@@ -203,6 +208,7 @@ describe('ai@7 integration', () => {
 
         const result = streamText({ model: provider('test-model'), prompt: 'Why is Venice sinking?' });
         const sources = await result.sources;
+        const content = await result.content;
 
         expect(sources).toEqual([
             {
@@ -212,6 +218,12 @@ describe('ai@7 integration', () => {
                 url: 'https://example.com/venice',
                 title: 'Venice flooding',
                 providerMetadata: { venice: { content: 'Acqua alta' } },
+            },
+        ]);
+        expect(content.find((part) => part.type === 'text')).toHaveProperty('citations', [
+            {
+                source: { type: 'source', sourceType: 'url', id: 'venice-web-search-0', url: 'https://example.com/venice', title: 'Venice flooding' },
+                citedText: 'Acqua alta',
             },
         ]);
     });
